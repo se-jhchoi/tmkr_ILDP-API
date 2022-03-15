@@ -1,0 +1,463 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.SvcHistMapper">
+    <select id="selectSvcHist" parameterType="se.common.SearchDateDto" resultType="se.app.svc.SvcHistDto">
+    	SELECT  CASE
+		            WHEN REPAIR_TYPE_CD='2' THEN '사고수리'
+		            WHEN SVC_TYPE_CD='20' THEN C.CODE_NM
+		            ELSE '일반점검'
+		            END  SVC_NM 
+		        , B.GROUP_NAME SHOP_NM
+		        , A.PROPO_DT
+		        , A.PROPO_SEQ
+		        , D.URL AS FILE_URL
+		FROM    SVC_PROPO A
+		LEFT OUTER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+		LEFT OUTER JOIN CO_CODE C ON A.SVC_TYPE_FMS_CD=C.CODE AND CODE_TYPE='SV01011'
+		LEFT OUTER JOIN (SELECT REF_KEY1
+		                           , REF_KEY2
+		                           , REF_KEY3
+		                           , URL, URL_ENC_FILE
+		                           , ROW_NUMBER () OVER (PARTITION BY REF_KEY1, REF_KEY2, REF_KEY3 ORDER BY EDOC_SEQ DESC) AS RN
+		                       FROM CO_EDOC_LIST
+		                       WHERE TYPE_CD = '24'
+		                       AND STATUS = 'VALID') D ON A.SHOP_CD = D.REF_KEY1 AND A.PROPO_DT = D.REF_KEY2 AND A.PROPO_SEQ = D.REF_KEY3::numeric AND D.RN=1
+		WHERE   1=1
+		AND     A.VIN = #{vin}
+		AND     A.STAT_CD IN ('75', '80')
+		AND		A.PDC_YN = 'N'
+		AND     A.SHOP_CD IN ( SELECT GROUP_ID FROM CO_GROUP WHERE ( GROUP_TYPE IN ('P','A') AND USAGE_TYPE IN ('S','R') AND USE_YN = 'Y' ) )
+		<if test='start_dt!=null and start_dt!=""'>
+        AND	A.PROPO_DT >=#{start_dt}
+        </if>
+        <if test='end_dt!=null and end_dt!=""'>
+        AND	A.PROPO_DT &lt;=#{end_dt}
+        </if>
+		ORDER BY A.PROPO_DT DESC
+    </select>
+    
+    <select id="selectSRepairMain" parameterType="se.app.svc.RepairMainDto" resultType="se.app.svc.RepairMainDto">
+    	WITH WITH_FRM_PART_TABLE AS (  SELECT A.shop_cd
+								    		, A.propo_dt
+										    , A.propo_seq
+										    , A.propo_stat_cd
+										    , A.ro_type_cd
+										    , A.settle_type_cd
+										    , A.frm_no
+										    , '' AS part_no
+									        , A.frm_nm AS frm_part_nm
+									        , A.qty
+									        , A.qty AS real_issu_qty
+									        , A.grp_no
+									        , A.disp_rank
+									        , 'N' AS CANCEL_YN
+									        , C.apply_amt AS retail_price
+									        , CASE
+									             WHEN A.ro_type_cd = 'I' THEN A.qty * A.mh * A.sale_unit_price
+									             WHEN A.ro_type_cd = 'G' THEN A.qty * A.mh * A.sale_unit_price
+									             --PSP 선수금 금액 보여주는 것 조정
+									          WHEN A.ro_type_cd = 'Y' THEN A.psp_amt
+									             ELSE A.qty * A.mh * C.apply_amt
+									          END
+									             AS show_cnfm_sale_amt
+										 FROM svc_propo_labor A
+										 LEFT OUTER JOIN SVC_FRM B ON A.FRM_NO = B.FRM_NO
+										 LEFT OUTER JOIN SVC_PROPO D ON A.SHOP_CD = D.SHOP_CD
+											      					 AND A.PROPO_DT = D.PROPO_DT
+											      					 AND A.PROPO_SEQ = D.PROPO_SEQ
+										 LEFT OUTER JOIN SVC_CHARGE_RATE C ON ( C.GROUP_ID = (SELECT holding_id
+													                            FROM co_group
+													                           WHERE GROUP_ID = D.shop_cd)
+																           AND C.frm_type_cd = B.frm_type_cd
+																           AND A.propo_dt BETWEEN C.apply_st_date AND C.apply_end_date)
+										 LEFT OUTER JOIN SVC_WA_CHARGE_RATE E ON (A.propo_dt BETWEEN E.apply_st_date AND E.apply_end_date)
+										 LEFT OUTER JOIN SVC_FMS_CHARGE_RATE F ON (A.propo_dt BETWEEN F.apply_st_date AND F.apply_end_date)
+										 LEFT OUTER JOIN SVC_INSU_CHARGE_RATE G ON ( g.GROUP_ID = (SELECT holding_id
+														                            FROM co_group
+														                           WHERE GROUP_ID = d.shop_cd)
+																	           AND g.frm_type_cd = b.frm_type_cd
+																	           AND A.propo_dt BETWEEN G.apply_st_date AND G.apply_end_date)
+									 	 LEFT OUTER JOIN SVC_PSP_CHARGE_RATE Y ON (A.propo_dt BETWEEN Y.apply_st_date AND Y.apply_end_date)
+										 	 WHERE 1=1
+										 	 AND   A.SHOP_CD =  #{shop_cd}
+								             AND   A.PROPO_DT =  #{propo_dt}
+								             AND   A.PROPO_SEQ =  #{propo_seq}::NUMERIC
+										 UNION ALL
+										   SELECT A.shop_cd
+										        , A.propo_dt
+										        , A.propo_seq
+										        , A.propo_stat_cd
+										        , A.ro_type_cd
+										        , A.settle_type_cd
+										        , '' AS frm_no
+										        , A.part_no
+										        , B.part_nm AS frm_part_nm
+										        , A.rqst_issu_qty AS qty                                    -- 불출 요청 수량
+										        , A.real_issu_qty                                           -- 실 수량
+										        , A.grp_no
+										        , A.disp_rank
+										        , A.cancel_yn                                               -- FRM 정보
+										        , E.retail_price
+											    , CASE
+											         WHEN A.ro_type_cd = 'Y' THEN COALESCE(Y.amt, 0)
+											      ELSE COALESCE(A.real_issu_qty, 0) * COALESCE(E.retail_price, 0)
+											      END AS show_cnfm_sale_amt
+											 FROM SVC_PROPO_PART A
+											 LEFT OUTER JOIN PT_PART B ON A.PART_NO = B.PART_NO
+											 LEFT OUTER JOIN CO_GROUP C ON A.SHOP_CD = C.GROUP_ID
+											 LEFT OUTER JOIN SVC_PROPO D ON A.SHOP_CD = D.SHOP_CD
+												      					 AND A.PROPO_DT = D.PROPO_DT
+												      					 AND A.PROPO_SEQ = D.PROPO_SEQ
+											 LEFT OUTER JOIN PT_PRICE E ON ( B.PART_NO = E.PART_NO
+										           						AND A.PROPO_DT BETWEEN REPLACE (E.APPLY_DT, '-', '') AND REPLACE (E.END_DT, '-', ''))
+											 LEFT OUTER JOIN SVC_WR F ON ( F.GROUP_ID = (SELECT holding_id
+										                            					   FROM co_group
+										                           						  WHERE GROUP_ID = D.SHOP_CD)
+										      							   AND A.PROPO_DT BETWEEN F.APPLY_ST_DATE AND F.APPLY_END_DATE)
+											 LEFT OUTER JOIN (SELECT B.psp_item_cd
+														            , A.propo_seq
+														            , C.part_no
+														            , B.vin
+														            , A.shop_cd
+														            , A.propo_dt
+														            , C.part_start_dt
+														            , C.part_end_dt
+														            , C.amt
+														         FROM svc_propo A
+														            , svc_psp B
+														            , (SELECT psp_item_cd
+														                    , part_no
+														                    , svc_model_cd
+														                    , part_start_dt
+														                    , part_end_dt
+														                    , amt
+														                 FROM psp_item_part
+														               UNION ALL
+														               SELECT A.psp_item_cd
+														                    , A.subs_part_no AS part_no
+														                    , A.svc_model_cd
+														                    , B.part_start_dt
+														                    , B.part_end_dt
+														                    , B.amt
+														                 FROM psp_item_subs_part A, psp_item_part b
+														                WHERE 1=1
+													                      AND A.psp_item_cd = B.psp_item_cd
+													                      AND A.part_no = B.part_no
+													                      AND A.svc_model_cd = B.svc_model_cd) C
+														        WHERE A.vin = B.vin
+													              AND A.shop_cd = B.shop_cd
+													              AND A.propo_dt = B.propo_dt
+													              AND A.propo_seq = B.propo_seq
+													              AND A.svc_model_cd = C.svc_model_cd
+													              AND B.apply_st_date BETWEEN C.part_start_dt AND C.part_end_dt
+													              AND B.psp_item_cd = C.psp_item_cd) y           -- PSP 항목 추가
+													              ON  A.part_no = Y.part_no                             -- PSP 항목 추가
+															      AND A.shop_cd = Y.shop_cd                            -- PSP 항목 추가
+															      AND A.propo_dt = Y.propo_dt                          -- PSP 항목 추가
+															      AND A.propo_seq = Y.propo_seq                        -- PSP 항목 추가
+															      AND A.fms_item_cd = Y.psp_item_cd
+										    WHERE 1=1
+										    AND   A.CANCEL_YN = 'N'
+											AND   A.SHOP_CD =  #{shop_cd}
+								            AND   A.PROPO_DT =  #{propo_dt}
+								            AND   A.PROPO_SEQ =  #{propo_seq}::NUMERIC
+									)
+		SELECT A.SHOP_CD 																											-- 서비스센터 코드
+			 , A.PROPO_DT 																											-- 제안서 일자
+			 , A.PROPO_SEQ																											-- 제안서 번호
+			 , (SELECT (SELECT VARIANT_NM FROM VS_VARIANT WHERE VARIANT_CD = X.VARIANT_CD) --INTO V_RETURN							-- 차종
+				FROM CO_VEHIC X
+				WHERE X.VIN = (SELECT y.VIN FROM SVC_PROPO y WHERE y.SHOP_CD = #{shop_cd} AND y.PROPO_DT = #{propo_dt} AND  y.PROPO_SEQ = #{propo_seq}::NUMERIC) )|| ' ' || B.SFX_CD || ' ' || B.MODEL_YEAR AS VARIANT_NM
+			 , B.VEHIC_NO1 || ' ' || B.VEHIC_NO2 										AS VEHIC_NO									-- 차량번호
+			 , A.VIN																	AS VIN										-- 차대번호
+			 , (COALESCE(A.VEHIC_BASE_ODOMETER, 0) + COALESCE(A.ODOMETER, 0))			AS ENTRY_ODO								-- 입고 주행거리
+			 , G.GROUP_NAME 															AS SHOP_NAME								-- 서비스센터
+			 , G.ADDR || ' ' || G.ADDR_NO												AS COMPANY_ADDRESS							-- 센터 주소
+			 , G.TEL_AREA || '-' || G.TEL_NO											AS COMPANY_PHONE							-- 센터 번호
+			 , C.NAME 																	AS SA_NAME									-- 담당SA 
+		     , TO_CHAR (TO_DATE (A.PROPO_DT, 'YYYYMMDD'), 'YYYY-MM-DD')					AS ENTRY_DATE								-- 입고 일자
+		     , B.ODOMETER 																AS VEHIC_ODOMETER							-- 차량 주행거리
+		     , S.SETTLE_DT																AS ENTRY_DONE_DATE							-- 점검/정비완료일자
+			 , S.ADDSERVICE_YN															AS ENTRY_ADD_MAINTAINANCE					-- 추가정비 동의 여부
+		     , TO_CHAR (A.CUST_DELIVERY_REAL_DT, 'YYYY-MM-DD') 							AS ENTRY_REALEASE_DATE						-- 출고일자
+		     , CASE WHEN HCALL.STAT_CD = '99' THEN ''
+			   ELSE TO_CHAR(HCALL.HAPPYCALL_EXPT_DT, 'YYYY-MM-DD')
+			   END AS ENTRY_ESTIMATE_HAPPYCALL_DATE 																				-- 해피콜 예정일
+		     , TO_CHAR ( TO_DATE (A.NEX_SVC, 'YYYYMMDD'), 'YYYY-MM-DD')					AS ENTRY_NEXT_MAINTANACE_DATE				-- 차기 점검 권장 일자
+		     , COALESCE(S.SALE_LABOR_AMT, 0)											AS PARTS_SERVICE_PRICE1						-- 수리금액/공임
+			 , COALESCE(S.SALE_PART_AMT, 0)												AS PARTS_PRICE								-- 수리금액/부품
+			 , COALESCE(S.SALE_SUBLET_AMT, 0) 											AS PARTS_SERVICE_PRICE2						-- 수리금액/외주
+			 , COALESCE(S.SALE_LABOR_AMT, 0) + COALESCE(S.SALE_PART_AMT, 0) + COALESCE(S.SALE_SUBLET_AMT, 0) AS PARTS_TOTAL_PRICE	-- 수리금액/합계
+			 , COALESCE(S.F_DC_AMT, 0) 													AS MINUS_FMS_PRICE							-- 차감금액/FMS
+			 , COALESCE(S.SALE_AMT, 0) 													AS MINUS_GUARANTEE_PRICE					-- 차감금액/보증
+			 , COALESCE((CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN 0 ELSE (R.PAID_PREV_AMT * 100) / 110 END) + O.PSP_PREV_AMT, 0) AS MINUS_DEPOSIT_PRICE	-- 차감금액/선수금
+			 , COALESCE(S.DC_AMT, 0) 													AS MINUS_ETC_PRICE							-- 차감금액/그 외
+			 , COALESCE(S.F_DC_AMT, 0) + COALESCE(S.SALE_AMT, 0) + COALESCE(S.DC_AMT, 0)
+			      + COALESCE((CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN 0 ELSE (R.PAID_PREV_AMT * 100) / 110 END) + O.PSP_PREV_AMT, 0)
+			       AS MINUS_TOTAL_PRICE																																		-- 차감금액/합계
+			 , CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN S.SUM ELSE S.SUM - (R.PAID_PREV_AMT * 100) / 110 END  AS SUB_TOTAL_PRICE		-- 청구금액/소계
+			 , CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN S.VAT ELSE S.VAT - (R.PAID_PREV_AMT * 10) / 110 END 	 AS VAT_PRICE			-- 청구금액/부가세
+			 , CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN S.SUM ELSE S.SUM - (R.PAID_PREV_AMT * 100) / 110 END
+			 + CASE WHEN R.PREV_AMT_STAT_CD IN ('10', '99') OR R.PREV_AMT_STAT_CD IS NULL THEN S.VAT ELSE S.VAT - (R.PAID_PREV_AMT * 10) / 110 END 	 AS TOTAL_PRICE			-- 청구금액/총계[부가세포함]
+		  FROM SVC_PROPO A 
+		  LEFT OUTER JOIN CO_VEHIC B ON A.VIN = B.VIN
+		  LEFT OUTER JOIN CO_USERS C ON A.MNG_SA_ID = C.USER_ID
+		  LEFT OUTER JOIN CO_GROUP G ON A.SHOP_CD = G.GROUP_ID
+		  LEFT OUTER JOIN SVC_RESV R ON A.SHOP_CD = R.SHOP_CD
+										 AND A.PROPO_DT = R.PROPO_DT
+										 AND A.PROPO_SEQ = R.PROPO_SEQ
+		  LEFT OUTER JOIN  (  SELECT A.SHOP_CD
+						               , A.PROPO_DT
+						               , A.PROPO_SEQ
+						               , SUM (CASE WHEN A.RO_TYPE_CD = 'W' THEN G_AMT.FRM_AMT_W WHEN A.RO_TYPE_CD = 'F' THEN G_AMT.FRM_AMT_F WHEN A.RO_TYPE_CD = 'S' THEN G_AMT.FRM_AMT_S ELSE A.SALE_LABOR_AMT END) AS SALE_LABOR_AMT
+						               , SUM (CASE WHEN A.RO_TYPE_CD = 'W' THEN G_AMT.PART_AMT_W WHEN A.RO_TYPE_CD = 'F' THEN G_AMT.PART_AMT_F WHEN A.RO_TYPE_CD = 'S' THEN G_AMT.PART_AMT_S ELSE A.SALE_PART_AMT END) AS SALE_PART_AMT
+						               , SUM (A.SALE_SUBLET_AMT) AS SALE_SUBLET_AMT
+						               , SUM (CASE WHEN A.RO_TYPE_CD = 'W' THEN G_AMT.PART_AMT_W + G_AMT.FRM_AMT_W + COALESCE(A.SALE_SUBLET_AMT, 0) ELSE 0 END) AS SALE_AMT
+						               , SUM (CASE
+						                         WHEN A.RO_TYPE_CD = 'S' THEN G_AMT.FRM_AMT_S + G_AMT.PART_AMT_S + COALESCE(A.SALE_SUBLET_AMT, 0)
+						                         WHEN A.RO_TYPE_CD = 'Y' THEN (A.SALE_LABOR_AMT + A.SALE_PART_AMT + A.SALE_SUBLET_AMT) - (A.CNFM_TOT_AMT - A.VAT)
+						                         ELSE A.DC_LABOR_AMT + A.DC_PART_AMT + A.DC_SUBLET_AMT
+						                      END)
+						                    AS DC_AMT
+						               , SUM (CASE WHEN A.RO_TYPE_CD IN ('Y', 'W', 'S', 'F') THEN 0 ELSE (A.SALE_LABOR_AMT + A.SALE_PART_AMT + A.SALE_SUBLET_AMT) - (A.DC_LABOR_AMT + A.DC_PART_AMT + A.DC_SUBLET_AMT) END) AS SUM
+						               , SUM (CASE WHEN A.RO_TYPE_CD IN ('Y', 'W', 'S', 'F') THEN 0 ELSE A.VAT END) AS VAT
+						               , MAX (A.ADDSERVICE_YN) AS ADDSERVICE_YN
+						               , SUM(CASE WHEN A.RO_TYPE_CD = 'F' THEN G_AMT.FRM_AMT_F + G_AMT.PART_AMT_F
+						                 ELSE 0 
+						                 END ) AS F_DC_AMT
+						               , TO_CHAR (MAX (A.SETTLE_DT), 'YYYY-MM-DD') AS SETTLE_DT
+						            FROM SVC_SETTLE A
+						            LEFT OUTER JOIN (  SELECT SHOP_CD
+							                         , PROPO_DT
+							                         , PROPO_SEQ
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'W' AND LENGTH (FRM_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS FRM_AMT_W
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'W' AND LENGTH (PART_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS PART_AMT_W
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'F' AND LENGTH (FRM_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS FRM_AMT_F
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'F' AND LENGTH (PART_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS PART_AMT_F
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'S' AND LENGTH (FRM_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS FRM_AMT_S
+							                         , SUM (CASE WHEN RO_TYPE_CD = 'S' AND LENGTH (PART_NO) > 0 THEN SHOW_CNFM_SALE_AMT ELSE 0 END) AS PART_AMT_S
+							                      FROM WITH_FRM_PART_TABLE
+							                     WHERE RO_TYPE_CD IN ('W', 'F', 'S')
+							                  GROUP BY SHOP_CD, PROPO_DT, PROPO_SEQ) G_AMT
+									ON A.SHOP_CD = G_AMT.SHOP_CD
+						             AND A.PROPO_DT = G_AMT.PROPO_DT
+						             AND A.PROPO_SEQ = G_AMT.PROPO_SEQ
+						        GROUP BY A.SHOP_CD, A.PROPO_DT, A.PROPO_SEQ ) S ON A.SHOP_CD = S.SHOP_CD
+																			    AND A.PROPO_DT = S.PROPO_DT
+																			    AND A.PROPO_SEQ = S.PROPO_SEQ
+			LEFT OUTER JOIN SVC_HAPPYCALL HCALL ON A.SHOP_CD = HCALL.SHOP_CD
+												AND A.PROPO_DT = HCALL.PROPO_DT
+												AND A.PROPO_SEQ = HCALL.PROPO_SEQ
+			LEFT OUTER JOIN (SELECT A.SHOP_CD
+					                 , A.PROPO_DT
+					                 , A.PROPO_SEQ
+					                 , COALESCE(SUM (CASE WHEN A.RO_TYPE_CD = 'Y' AND A.REAL_ISSU_QTY > 0 THEN A.SHOW_CNFM_SALE_AMT ELSE 0 END), 0) AS PSP_PREV_AMT
+					              FROM WITH_FRM_PART_TABLE A
+					             WHERE A.CANCEL_YN = 'N'
+					               AND A.REAL_ISSU_QTY > 0
+					             GROUP BY A.SHOP_CD, A.PROPO_DT, A.PROPO_SEQ
+					             ) O ON A.SHOP_CD = O.SHOP_CD
+																	      		AND A.PROPO_DT = O.PROPO_DT
+																	      		AND A.PROPO_SEQ = O.PROPO_SEQ
+			WHERE 1=1
+			AND   A.SHOP_CD =  #{shop_cd}
+			AND   A.PROPO_DT =  #{propo_dt}
+			AND   A.PROPO_SEQ =  #{propo_seq}::NUMERIC
+    </select>
+    
+    <select id="selectSRepairDetail" parameterType="se.app.svc.RepairDetailDto" resultType="se.app.svc.RepairDetailDto">
+    	WITH WITH_FRM_PART_TABLE AS (  SELECT A.shop_cd
+										    , A.propo_dt
+										    , A.propo_seq
+										    , A.propo_stat_cd
+										    , A.ro_type_cd
+										    , A.settle_type_cd
+										    , A.frm_no
+										    , '' AS part_no
+									        , A.frm_nm AS frm_part_nm
+									        , A.QTY
+									        , A.qty AS real_issu_qty
+									        , A.mh
+									        , A.grp_no
+									        , A.disp_rank
+									        , 'N' AS cancel_yn
+									        , C.apply_amt AS retail_price
+									        , A.sale_unit_price
+									        , A.qty * A.mh * A.sale_unit_price AS sale_amt
+									        , CASE
+									             WHEN A.ro_type_cd = 'I' THEN A.qty * A.mh * A.sale_unit_price
+									             WHEN A.ro_type_cd = 'G' THEN A.qty * A.mh * A.sale_unit_price
+									             --PSP 선수금 금액 보여주는 것 조정
+									          WHEN A.ro_type_cd = 'Y' THEN A.psp_amt
+									             ELSE A.qty * A.mh * C.apply_amt
+									          END
+									             AS show_cnfm_sale_amt
+										    , 0  AS DC
+										 FROM svc_propo_labor A
+										 LEFT OUTER JOIN SVC_FRM B ON A.FRM_NO = B.FRM_NO
+										 LEFT OUTER JOIN SVC_PROPO D ON A.SHOP_CD = D.SHOP_CD
+											      					 AND A.PROPO_DT = D.PROPO_DT
+											      					 AND A.PROPO_SEQ = D.PROPO_SEQ
+										 LEFT OUTER JOIN SVC_CHARGE_RATE C ON ( C.GROUP_ID = (SELECT holding_id
+													                            FROM co_group
+													                           WHERE GROUP_ID = D.shop_cd)
+																           AND C.frm_type_cd = B.frm_type_cd
+																           AND A.propo_dt BETWEEN C.apply_st_date AND C.apply_end_date)
+										 LEFT OUTER JOIN SVC_WA_CHARGE_RATE E ON (A.propo_dt BETWEEN E.apply_st_date AND E.apply_end_date)
+										 LEFT OUTER JOIN SVC_FMS_CHARGE_RATE F ON (A.propo_dt BETWEEN F.apply_st_date AND F.apply_end_date)
+										 LEFT OUTER JOIN SVC_INSU_CHARGE_RATE G ON ( g.GROUP_ID = (SELECT holding_id
+														                            FROM co_group
+														                           WHERE GROUP_ID = d.shop_cd)
+																	           AND g.frm_type_cd = b.frm_type_cd
+																	           AND A.propo_dt BETWEEN G.apply_st_date AND G.apply_end_date)
+									 	 LEFT OUTER JOIN SVC_PSP_CHARGE_RATE Y ON (A.propo_dt BETWEEN Y.apply_st_date AND Y.apply_end_date)
+										 UNION ALL
+										   SELECT A.shop_cd
+										        , A.propo_dt
+										        , A.propo_seq
+										        , A.propo_stat_cd
+										        , A.ro_type_cd
+										        , A.settle_type_cd
+										        , '' AS frm_no
+										        , A.part_no
+										        , B.part_nm AS frm_part_nm
+										        , A.rqst_issu_qty AS QTY                                    -- 불출 요청 수량
+										        , A.real_issu_qty                                           -- 실 수량
+										        , NULL AS mh
+										        , A.grp_no
+										        , A.disp_rank
+										        , A.cancel_yn                                               -- FRM 정보
+										        , E.retail_price
+										        , A.sale_unit_price
+										        -- DECODE (a.real_issu_qty, 0, rqst_issu_qty, a.real_issu_qty)
+										        , CASE WHEN A.REAL_ISSU_QTY = 0 THEN A.RQST_ISSU_QTY * A.SALE_UNIT_PRICE
+										          ELSE A.REAL_ISSU_QTY * A.SALE_UNIT_PRICE
+										          END AS SALE_AMT
+											    , CASE
+											         WHEN A.ro_type_cd = 'Y' THEN COALESCE(Y.amt, 0)
+											      ELSE COALESCE(A.real_issu_qty, 0) * COALESCE(E.retail_price, 0)
+											      END AS show_cnfm_sale_amt
+											    , Y.DC
+											 FROM SVC_PROPO_PART A
+											 LEFT OUTER JOIN PT_PART B ON A.PART_NO = B.PART_NO
+											 LEFT OUTER JOIN CO_GROUP C ON A.SHOP_CD = C.GROUP_ID
+											 LEFT OUTER JOIN SVC_PROPO D ON A.SHOP_CD = D.SHOP_CD
+												      					 AND A.PROPO_DT = D.PROPO_DT
+												      					 AND A.PROPO_SEQ = D.PROPO_SEQ
+											 LEFT OUTER JOIN PT_PRICE E ON ( B.PART_NO = E.PART_NO
+										           						AND A.PROPO_DT BETWEEN REPLACE (E.APPLY_DT, '-', '') AND REPLACE (E.END_DT, '-', ''))
+											 LEFT OUTER JOIN SVC_WR F ON ( F.GROUP_ID = (SELECT holding_id
+										                            					   FROM co_group
+										                           						  WHERE GROUP_ID = D.SHOP_CD)
+										      							   AND A.PROPO_DT BETWEEN F.APPLY_ST_DATE AND F.APPLY_END_DATE)
+											 LEFT OUTER JOIN (SELECT B.psp_item_cd
+														            , A.propo_seq
+														            , C.part_no
+														            , B.vin
+														            , A.shop_cd
+														            , A.propo_dt
+														            , C.part_start_dt
+														            , C.part_end_dt
+														            , C.amt
+														            , C.DC
+														         FROM svc_propo A
+														            , svc_psp B
+														            , (SELECT psp_item_cd
+														                    , part_no
+														                    , svc_model_cd
+														                    , part_start_dt
+														                    , part_end_dt
+														                    , amt
+														                    , dc
+														                 FROM psp_item_part
+														               UNION ALL
+														               SELECT A.psp_item_cd
+														                    , A.subs_part_no AS part_no
+														                    , A.svc_model_cd
+														                    , B.part_start_dt
+														                    , B.part_end_dt
+														                    , B.amt
+														                    , B.DC
+														                 FROM psp_item_subs_part A, psp_item_part B
+														                WHERE 1=1
+													                      AND A.psp_item_cd = B.psp_item_cd
+													                      AND A.part_no = B.part_no
+													                      AND A.svc_model_cd = B.svc_model_cd) C
+														        WHERE A.vin = B.vin
+													              AND A.shop_cd = B.shop_cd
+													              AND A.propo_dt = B.propo_dt
+													              AND A.propo_seq = B.propo_seq
+													              AND A.svc_model_cd = C.svc_model_cd
+													              AND B.apply_st_date BETWEEN C.part_start_dt AND C.part_end_dt
+													              AND B.psp_item_cd = C.psp_item_cd) y           -- PSP 항목 추가
+													              ON  A.part_no = Y.part_no                             -- PSP 항목 추가
+															      AND A.shop_cd = Y.shop_cd                            -- PSP 항목 추가
+															      AND A.propo_dt = Y.propo_dt                          -- PSP 항목 추가
+															      AND A.propo_seq = Y.propo_seq                        -- PSP 항목 추가
+															      AND A.fms_item_cd = Y.psp_item_cd
+										    WHERE 1=1
+										    AND   A.cancel_yn = 'N'
+								)
+
+ SELECT B.SHOP_CD
+ 		 , B.PROPO_DT
+ 		 , B.PROPO_SEQ
+ 		 , B.RO_TYPE_CD 		AS JOB_ACCOUNT_CODE
+	     , B.RO_TYPE_NM			AS JOB_ACCOUNT
+	     , B.GB					AS JOB_SECTION
+ 		 , B.RANK_NUM				AS JOB_INDEX
+	     , REPLACE(B.FRM_PART, '..', '')	AS JOB_CODE
+	     , CASE WHEN B.QTY::TEXT = '0' THEN ''
+	       ELSE B.QTY::TEXT 
+	       END AS JOB_QUANTITY
+	     , TO_CHAR(B.MH, 'FM9990.99')	AS JOB_TIME
+	     , B.DC::TEXT				AS JOB_DC
+	     , B.CNFM_UNIT_PRICE		AS JOB_PRICE
+	     , B.CNFM_AMT				AS JOB_TOTAL_PRICE
+	     , B.REAL_AMT				AS JOB_CLAIM_PRICE
+	  FROM (SELECT A.SHOP_CD, A.PROPO_DT, A.PROPO_SEQ
+	  			 , ROW_NUMBER() OVER(PARTITION BY A.RO_TYPE_CD ORDER BY A.RO_TYPE_CD, COALESCE(A.GRP_NO, 100), A.DISP_RANK) AS RANK_NUM
+				 , CASE WHEN A.FRM_NO = '' THEN SUBSTR (A.FRM_PART_NM, 0, 40) || '(' || A.PART_NO || ')'
+				   ELSE A.FRM_PART_NM || '(' || A.FRM_NO || ')'
+				   END AS FRM_PART
+			     , CASE WHEN A.FRM_NO = '' THEN 'A'
+			       ELSE 'L'
+			       END AS GB
+			     , CASE WHEN A.DC = 0 THEN ''
+			       ELSE A.DC::TEXT
+			       END AS DC
+			     , CASE WHEN A.RO_TYPE_CD IN ('W', 'S', 'F', 'Y') THEN A.RETAIL_PRICE 
+			       ELSE A.SALE_UNIT_PRICE 
+			       END AS CNFM_UNIT_PRICE
+			     , CASE WHEN A.FRM_NO = '' THEN CASE WHEN A.REAL_ISSU_QTY = 0 THEN A.QTY 
+											    ELSE A.REAL_ISSU_QTY 
+											    END 
+			       ELSE 0
+			       END AS QTY
+			     , MH
+			     , CASE WHEN A.RO_TYPE_CD IN ('W', 'S', 'F') THEN A.SHOW_CNFM_SALE_AMT
+			       ELSE A.SALE_AMT
+			       END CNFM_AMT
+			     , CASE WHEN A.RO_TYPE_CD = 'G' THEN CASE WHEN A.RO_TYPE_CD IN ('W', 'F') THEN A.SHOW_CNFM_SALE_AMT
+											       ELSE A.SALE_AMT
+											       END 
+						WHEN A.RO_TYPE_CD = 'P' THEN CASE WHEN RO_TYPE_CD IN ('W', 'F') THEN A.SHOW_CNFM_SALE_AMT
+											       ELSE A.SALE_AMT
+											       END 
+						WHEN A.RO_TYPE_CD = 'Y' THEN A.SHOW_CNFM_SALE_AMT
+				   ELSE 0
+				   END AS REAL_AMT
+			     , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV0010' AND CODE = A.RO_TYPE_CD) AS RO_TYPE_NM
+			     , A.RO_TYPE_CD
+			     , A.DISP_RANK
+			     , COALESCE(A.GRP_NO, 100) AS GRP_NO
+	          FROM WITH_FRM_PART_TABLE A
+	         WHERE A.SHOP_CD =  #{shop_cd}
+	           AND A.PROPO_DT =  #{propo_dt}
+	           AND A.PROPO_SEQ =  #{propo_seq}::NUMERIC
+	           AND A.CANCEL_YN = 'N'
+	           AND A.REAL_ISSU_QTY > 0
+	        ) B
+    </select>
+    
+</mapper>

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.TestdriveMapper">
+    <select id="selectListCommonCode" parameterType="se.app.testdrive.CommonCodeDto" resultType="se.app.testdrive.CommonCodeDto">
+	SELECT	#{brand_cd} as brand_cd
+			, code_type
+			, code
+			, code_nm as name
+	FROM	CO_CODE a
+	WHERE	1=1
+	AND		CODE_TYPE=#{code_type}
+	AND		USE_YN='Y'
+	ORDER BY DISPALY_ORDER::numeric ASC
+    </select>
+    
+    <select id="selectListShop" parameterType="se.app.testdrive.CommonCodeDto" resultType="se.app.testdrive.CommonCodeDto">
+	    <choose>
+	    	<when test='brand_cd!=null and brand_cd.equals("L")'>
+		    select	#{brand_cd} as brand_cd
+					, #{code_type} as code_type
+					, code
+					, name
+			from	(			
+					select	group_id as code
+							, group_name as name
+							, dspy_rank::numeric as dspy_rank
+					from	co_group a
+					where	group_type in ('S','W')
+					and		system_use_yn='Y'
+					and		use_yn='Y'
+					and		holding_id != 'TM00000'
+					union all
+					select	group_id as code
+							, replace(replace(group_name,'렉서스','렉서스 '),'서비스센터',' 시승센터') as name
+							, 999 as dspy_rank
+					from	co_group a
+					where	group_id in ('DT30106','PM30102')
+		    		) a
+			where	1=1    		
+			order by dspy_rank asc 	    	
+	    	</when>
+	    	<when test='brand_cd!=null and brand_cd.equals("T")'>
+		    select	#{brand_cd} as brand_cd
+					, #{code_type} as code_type
+					, code
+					, name
+			from	(			
+					select	group_id as code
+							, group_name as name
+							, dspy_rank::numeric as dspy_rank
+					from	co_group_toyota a
+					where	group_type in ('S','W')
+					and		system_use_yn='Y'
+					and		use_yn='Y'
+					and		holding_id != 'TM00000'
+					union all
+					select	group_id as code
+							, replace(replace(group_name,'렉서스','렉서스 '),'서비스센터',' 시승센터') as name
+							, 999 as dspy_rank
+					from	co_group_toyota a
+					where	group_id in ('')
+		    		) a
+			where	1=1    		
+			order by dspy_rank asc 	    	
+	    	</when>
+	    	<otherwise>
+	    	select	null as brand_cd, null as code_type, null as code, null as name
+	    	</otherwise>
+	    </choose>
+    </select>    
+    
+   	<insert id="insertRequest" parameterType="se.app.testdrive.TestdriveRequestDto" useGeneratedKeys="true" keyColumn="request_number" keyProperty="request_number">
+   	INSERT INTO	EXT_TESTDRIVE_REQUEST
+   	(
+		request_number,client_nm,brand_cd,shop_cd,model,variant
+		,td_input_dt,td_req_dt,td_req_time,cust_nm,cust_hp
+		,visit_area,gender,age,email,inbound_path,custinfo_exp_dt,remark
+		,status,dms_interface_dt,reg_user_id,reg_dt,upd_user_id,upd_dt
+		,thmp_td_client_id, thmp_td_url
+	)
+	VALUES
+   	(
+   		DEFAULT,#{client_nm},#{brand_cd},#{shop_cd},#{model},#{variant}
+   		,#{td_input_dt},#{td_req_dt},#{td_req_time},#{cust_nm},#{cust_hp}
+   		,#{visit_area},#{gender},#{age},#{email},#{inbound_path},#{custinfo_exp_dt},#{remark}
+		,'10',null,#{client_nm},now(),null,null
+		,#{thmp_td_client_id},#{thmp_td_url}
+   	)
+	</insert>
+	
+    <select id="selectOneRequest" parameterType="Integer" resultType="se.app.testdrive.TestdriveRequestDto">
+	SELECT	request_number,client_nm,brand_cd,shop_cd,model,variant
+			,td_input_dt,td_req_dt,td_req_time,cust_nm,cust_hp
+			,visit_area,gender,age,email,inbound_path,custinfo_exp_dt,remark
+			,case when status='10' then 'Request' else 'Register' end as status_nm
+			,thmp_td_client_id, thmp_td_url
+	FROM	EXT_TESTDRIVE_REQUEST
+	WHERE	1=1
+	AND		req_seq=#{request_number}
+    </select>
+
+</mapper>

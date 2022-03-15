@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.AdminCustomerMapper">
+    <select id="selectCustomerList" parameterType="se.app.admin.customer.AdminCustomerDto" resultType="se.app.admin.customer.AdminCustomerDto">
+    	SELECT LPM_USER_NO
+		    , A.CUST_NM
+		    , HP
+			, ARRAY_TO_STRING(ARRAY_AGG(VIN),'|') VIN
+			, ARRAY_TO_STRING(ARRAY_AGG(LAST_RETAIL_SALES_DT),'|') LAST_RETAIL_SALES_DT
+			, ARRAY_TO_STRING(ARRAY_AGG(GROUP_NAME),'|') GROUP_NAME
+		FROM (    
+		    SELECT B.LPM_USER_NO, C.CUST_NM, D.VIN, E.LAST_RETAIL_SALES_DT, F.GROUP_NAME
+		    , REGEXP_REPLACE(REPLACE(C.HP_AREA||C.HP_NO,'-',''), '(.{3})(.+)(.{4})', '\1-\2-\3') HP
+		    FROM CI_CUST A
+		    INNER JOIN (
+		        SELECT ROW_NUMBER() OVER(ORDER BY REG_DT DESC) RN, CCL.* 
+				FROM CI_CUST_LPM CCL 
+				WHERE USE_YN='Y' AND LPM_USER_NO = #{lpm_user_no}
+		    ) B ON A.CI_SEQ=B.CI_SEQ  AND RN=1
+		    INNER JOIN CU_BASE C ON A.CI_SEQ=C.CI_SEQ
+		    INNER JOIN CO_V_LINK D ON C.CUST_SEQ = D.CUST_SEQ
+		    LEFT OUTER JOIN OM_CONTRACT E ON D.VIN=E.VIN
+		    LEFT OUTER JOIN CO_GROUP F ON E.DEALER_ID=F.GROUP_ID
+		) A
+		GROUP BY A.LPM_USER_NO, CUST_NM, HP
+    </select>
+</mapper>

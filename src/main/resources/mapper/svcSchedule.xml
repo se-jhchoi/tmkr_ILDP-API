@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.ScheduleMapper">
+    <select id="selectSvcScheduleList" parameterType="se.app.svc.schedule.ScheduleDto" resultType="se.app.svc.schedule.ScheduleDto">
+    	SELECT *
+		FROM (
+		        SELECT A.VIN AS VIN
+		            , A.SHOP_CD AS SHOP_CD
+		            , C.GROUP_NAME AS SHOP_NM
+		            , A.REAL_RESV_DATE AS SVC_IN_DT
+		            , '예약' AS TYPE_NM
+		            , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV01010' AND CODE = A.SVC_TYPE_CD) AS SVC_TYPE_NM
+		            , C.ADDR||' '||ADDR_NO AS ADDR
+		            , REGEXP_REPLACE(C.TEL_AREA||C.TEL_NO, '(.{3})(.+)(.{4})', '\1-\2-\3') TEL_NO
+		            , (SELECT NAME FROM CO_USERS WHERE USER_ID = A.MNG_SA_ID) AS MNG_SA_NM
+		        FROM SVC_RESV A
+		        INNER JOIN CO_GROUP C ON A.SHOP_CD = C.GROUP_ID
+		        WHERE 1=1
+		        AND A.VIN = #{vin}
+		        AND A.STAT_CD IN ('10', '20', '70')
+		        AND NOT EXISTS (SELECT 'X'
+		                        FROM SVC_PROPO
+		                        WHERE SHOP_CD = A.SHOP_CD
+		                        AND RESV_DT = A.RESV_DT
+		                        AND RESV_SEQ = A.RESV_SEQ
+		                        AND STAT_CD != '99'
+		                        AND STAT_CD != '10'
+		                        AND PAYBACK_YN = 'N')
+		        <if test='start_dt!=null and start_dt!=""'>
+		        AND	A.REAL_RESV_DATE >=#{start_dt}
+		        </if>
+		        <if test='end_dt!=null and end_dt!=""'>
+		        AND	A.REAL_RESV_DATE &lt;=#{end_dt}
+		        </if>
+		        UNION ALL
+		        SELECT A.VIN AS VIN
+		            , A.SHOP_CD AS SHOP_CD
+		            , C.GROUP_NAME AS SHOP_NM
+		            , A.PROPO_DT AS SVC_IN_DT
+		            , '입고' AS TYPE_NM
+		            , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV01010' AND CODE = A.SVC_TYPE_CD) AS SVC_TYPE_NM
+		            , C.ADDR||' '||ADDR_NO AS ADDR
+		            , REGEXP_REPLACE(C.TEL_AREA||C.TEL_NO, '(.{3})(.+)(.{4})', '\1-\2-\3') TEL_NO
+		            , (SELECT NAME FROM CO_USERS WHERE USER_ID = A.MNG_SA_ID) AS MNG_SA_ID
+		        FROM SVC_PROPO A
+		        LEFT OUTER JOIN SVC_RESV B ON A.SHOP_CD = B.SHOP_CD AND A.RESV_DT = B.RESV_DT AND A.RESV_SEQ = B.RESV_SEQ 
+		        INNER JOIN CO_GROUP C ON A.SHOP_CD = C.GROUP_ID
+		        WHERE 1=1
+		        AND A.VIN = #{vin}      
+		        AND A.STAT_CD != '99'
+		        AND A.STAT_CD != '10'
+		        AND A.PAYBACK_YN = 'N'
+		        <if test='start_dt!=null and start_dt!=""'>
+		        AND	A.PROPO_DT >=#{start_dt}
+		        </if>
+		        <if test='end_dt!=null and end_dt!=""'>
+		        AND	A.PROPO_DT &lt;=#{end_dt}
+		        </if>
+		    ) A
+		WHERE 1=1
+		ORDER BY SVC_IN_DT DESC
+    </select>
+</mapper>

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.OdometerMapper">
+    <select id="selectOdometerList" parameterType="se.common.SearchDateDto" resultType="se.app.svc.odometer.OdometerDto">
+    	SELECT  B.GROUP_NAME SHOP_NM, UPD_ODOMETER ODOMETER, A.REG_DT, A.VIN
+		FROM    SVC_ODOMETER_HIST A
+		INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+		WHERE   VIN=#{vin}
+		<if test='start_dt!=null and start_dt!=""'>
+        AND		A.PROPO_DT >=#{start_dt}
+        </if>
+        <if test='end_dt!=null and end_dt!=""'>
+        AND		A.PROPO_DT &lt;=#{end_dt}
+        </if>
+		ORDER BY ISSU_DT DESC
+    </select>
+</mapper>

@@ -1,0 +1,351 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.ResvMapper">
+	<insert id="insertResv" parameterType="se.app.svc.resv.ResvRegistDto">
+		<selectKey keyProperty="seq" resultType="int" order="BEFORE">
+			SELECT nextval('seq_lpm_svc_resv')
+		</selectKey>
+		INSERT INTO LPM_SVC_RESV
+			(seq, lpm_user_no, real_resv_date, real_resv_st_hm, real_resv_end_hm, resv_cust_nm, resv_hp_no, resv_stall_no, shop_cd, svc_type_cd, vin, stat_cd, reg_user_id, reg_dt)
+		VALUES
+			(#{seq}, #{lpm_user_no}::numeric, #{real_resv_date}, #{real_resv_st_hm}, #{real_resv_end_hm}, #{resv_cust_nm}, #{resv_hp_no}
+			, #{resv_stall_no}::numeric, #{shop_cd}, #{svc_type_cd}, #{vin}, '01', 'LL_SYSTEM', NOW())
+	</insert>
+	
+	<update id="updateResvCancel" parameterType="se.app.svc.resv.ResvCancelDto">
+		UPDATE	LPM_SVC_RESV
+		SET		STAT_CD='99'
+		WHERE	SEQ=#{resv_ildp_seq}::numeric
+	</update>
+	
+
+    <select id="selectResvList" parameterType="se.app.svc.resv.ResvDto" resultType="se.app.svc.resv.ResvDto">
+	    SELECT 	A.SHOP_CD
+				, B.GROUP_NAME SHOP_NM
+				, VARIANT_NM
+				, VEHIC_NO1||VEHIC_NO2 VEHIC_NO
+				, REAL_RESV_DATE RESV_DATE
+				, REAL_RESV_ST_HM RESV_ST_HM
+				, REAL_RESV_END_HM RESV_END_HM
+				, TO_DATE(REAL_RESV_DATE, 'YYYYMMDD') || ' ' || TO_CHAR(TO_TIMESTAMP(REAL_RESV_ST_HM, 'HH24MI'), 'HH24:MI') || '~' || TO_CHAR(TO_TIMESTAMP(REAL_RESV_END_HM, 'HH24MI'), 'HH24:MI') FULL_RESV_DATE
+				, SVC_TYPE_CD 
+				, C.CODE_NM SVC_TYPE_NM
+				, STAT_CD
+				, CASE WHEN STAT_CD='01' THEN '예약요청'
+					   WHEN	STAT_CD='02' THEN '예약실패'
+					   WHEN	STAT_CD='91' THEN '취소요청'
+					   WHEN	STAT_CD='92' THEN '취소실패'
+					   ELSE D.CODE_NM
+						END STAT_NM
+				, VIN
+				, RESV_DT
+				, RESV_SEQ
+				, RESV_ILDP_SEQ
+				, A.REG_DT, RN
+		FROM	(
+			SELECT	ROW_NUMBER() OVER (ORDER BY COALESCE(A.REG_DT,B.REG_DT) DESC) RN
+					, COALESCE(B.SHOP_CD, A.SHOP_CD) SHOP_CD
+					, COALESCE(B.SVC_TYPE_CD, A.SVC_TYPE_CD) SVC_TYPE_CD
+					, COALESCE(B.STAT_CD, A.STAT_CD) STAT_CD
+					, COALESCE(B.VARIANT_NM, A.VARIANT_NM) VARIANT_NM
+					, COALESCE(B.VIN, A.VIN) VIN
+					, COALESCE(B.VEHIC_NO1, A.VEHIC_NO1) VEHIC_NO1
+					, COALESCE(B.VEHIC_NO2, A.VEHIC_NO2) VEHIC_NO2
+					, COALESCE(B.REAL_RESV_DATE, A.REAL_RESV_DATE) REAL_RESV_DATE
+					, COALESCE(B.REAL_RESV_ST_HM, A.REAL_RESV_ST_HM) REAL_RESV_ST_HM
+					, COALESCE(B.REAL_RESV_END_HM, A.REAL_RESV_END_HM) REAL_RESV_END_HM
+					, RESV_DT
+					, RESV_SEQ
+					, COALESCE(A.REG_DT,B.REG_DT) REG_DT
+					, SEQ RESV_ILDP_SEQ
+			FROM    (
+				SELECT	A.*, B.VARIANT_NM, B.VEHIC_NO1, B.VEHIC_NO2
+				FROM	LPM_SVC_RESV A 
+				INNER JOIN CO_VEHIC B ON A.VIN=B.VIN
+				WHERE	A.VIN=#{vin}
+			) A
+			FULL OUTER JOIN (
+					SELECT	SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+					FROM 	(
+						SELECT  ROW_NUMBER() OVER (ORDER BY RESV_DT DESC, RESV_SEQ DESC) RNUM, SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+						FROM    SVC_RESV
+						WHERE   VIN=#{vin}
+					) A
+			)B ON A.SEQ=B.RESV_ILDP_SEQ
+			WHERE	(
+				(A.STAT_CD = '01'  AND B.STAT_CD &lt; '70')
+				OR 
+				((A.STAT_CD = '10' OR A.STAT_CD = '91') AND ( B.STAT_CD = '10' or ( B.STAT_CD = '25' AND B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD'))))
+				OR
+				(A.STAT_CD IS NULL AND ( B.STAT_CD = '10' or ( B.STAT_CD = '25' AND B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD'))))
+			)
+			AND (B.REAL_RESV_DATE IS NOT NULL OR B.RESV_ILDP_SEQ IS NOT NULL)
+		) A
+		INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+		LEFT OUTER JOIN CO_CODE C ON A.SVC_TYPE_CD  = C.CODE AND C.CODE_TYPE = 'SV01010'
+		LEFT OUTER JOIN CO_CODE D ON A.STAT_CD  = D.CODE AND D.CODE_TYPE = 'SV0040'
+		ORDER BY SHOP_CD, RESV_DT, RESV_SEQ
+    </select>
+    
+    <select id="selectResv4ResvDt" parameterType="se.app.svc.resv.ResvDto" resultType="se.app.svc.resv.ResvDto">
+	    SELECT 	A.SHOP_CD
+				, B.GROUP_NAME SHOP_NM
+				, VARIANT_NM
+				, VEHIC_NO1||VEHIC_NO2 VEHIC_NO
+				, REAL_RESV_DATE RESV_DATE
+				, REAL_RESV_ST_HM RESV_ST_HM
+				, REAL_RESV_END_HM RESV_END_HM
+				, TO_DATE(REAL_RESV_DATE, 'YYYYMMDD') || ' ' || TO_CHAR(TO_TIMESTAMP(REAL_RESV_ST_HM, 'HH24MI'), 'HH24:MI') || '~' || TO_CHAR(TO_TIMESTAMP(REAL_RESV_END_HM, 'HH24MI'), 'HH24:MI') FULL_RESV_DATE
+				, SVC_TYPE_CD 
+				, C.CODE_NM SVC_TYPE_NM
+				, STAT_CD
+				, CASE WHEN STAT_CD='01' THEN '예약요청'
+					   WHEN	STAT_CD='02' THEN '예약실패'
+					   WHEN	STAT_CD='91' THEN '취소요청'
+					   WHEN	STAT_CD='92' THEN '취소실패'
+					   ELSE D.CODE_NM
+						END STAT_NM
+				, VIN
+				, RESV_DT
+				, RESV_SEQ
+				, RESV_ILDP_SEQ
+				, A.REG_DT, RN
+		FROM	(
+			SELECT	ROW_NUMBER() OVER (ORDER BY COALESCE(A.REG_DT,B.REG_DT) DESC) RN
+					, COALESCE(B.SHOP_CD, A.SHOP_CD) SHOP_CD
+					, COALESCE(B.SVC_TYPE_CD, A.SVC_TYPE_CD) SVC_TYPE_CD
+					, COALESCE(B.STAT_CD, A.STAT_CD) STAT_CD
+					, COALESCE(B.VARIANT_NM, A.VARIANT_NM) VARIANT_NM
+					, COALESCE(B.VIN, A.VIN) VIN
+					, COALESCE(B.VEHIC_NO1, A.VEHIC_NO1) VEHIC_NO1
+					, COALESCE(B.VEHIC_NO2, A.VEHIC_NO2) VEHIC_NO2
+					, COALESCE(B.REAL_RESV_DATE, A.REAL_RESV_DATE) REAL_RESV_DATE
+					, COALESCE(B.REAL_RESV_ST_HM, A.REAL_RESV_ST_HM) REAL_RESV_ST_HM
+					, COALESCE(B.REAL_RESV_END_HM, A.REAL_RESV_END_HM) REAL_RESV_END_HM
+					, RESV_DT
+					, RESV_SEQ
+					, COALESCE(A.REG_DT,B.REG_DT) REG_DT
+					, SEQ RESV_ILDP_SEQ
+			FROM    (
+				SELECT	A.*, B.VARIANT_NM, B.VEHIC_NO1, B.VEHIC_NO2
+				FROM	LPM_SVC_RESV A 
+				INNER JOIN CO_VEHIC B ON A.VIN=B.VIN
+			) A
+			FULL OUTER JOIN (
+					SELECT	SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+					FROM 	(
+						SELECT  ROW_NUMBER() OVER (ORDER BY RESV_DT DESC, RESV_SEQ DESC) RNUM, SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+						FROM    SVC_RESV
+						WHERE   RESV_DT=#{resv_dt}
+					) A
+			)B ON A.SEQ=B.RESV_ILDP_SEQ
+			WHERE	(
+				(A.STAT_CD = '01'  AND B.STAT_CD &lt; '70')
+				OR 
+				((A.STAT_CD = '10' OR A.STAT_CD = '91') AND ( B.STAT_CD = '10' or ( B.STAT_CD = '25' AND B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD'))))
+				OR
+				(A.STAT_CD IS NULL AND ( B.STAT_CD = '10' or ( B.STAT_CD = '25' AND B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD'))))
+			)
+			AND (B.REAL_RESV_DATE IS NOT NULL OR B.RESV_ILDP_SEQ IS NOT NULL)
+		) A
+		INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+		LEFT OUTER JOIN CO_CODE C ON A.SVC_TYPE_CD  = C.CODE AND C.CODE_TYPE = 'SV01010'
+		LEFT OUTER JOIN CO_CODE D ON A.STAT_CD  = D.CODE AND D.CODE_TYPE = 'SV0040'
+		ORDER BY SHOP_CD, RESV_DT, RESV_SEQ
+    </select>
+    
+    <select id="selectResvChkResvTime" parameterType="se.app.svc.resv.ResvRegistDto" resultType="int">
+    	SELECT	COUNT(*)
+    	FROM	(
+    		SELECT	'1'
+    		FROM	SVC_RESV
+			WHERE	SHOP_CD = #{shop_cd}
+			AND		REAL_RESV_DATE = #{real_resv_date}
+			AND		RESV_STALL_NO = #{resv_stall_no}::numeric
+			AND 	((((#{real_resv_st_hm} >= REAL_RESV_ST_HM) AND (#{real_resv_st_hm} &lt; REAL_RESV_END_HM))  OR	--시작시간이 확인대상시간의 중간에 걸치는 경우
+					((#{real_resv_end_hm} >  REAL_RESV_ST_HM) AND (#{real_resv_end_hm} &lt;= REAL_RESV_END_HM)))   --종료시간이 확인대상시간의 중간에 걸치는 경우
+					OR
+					(((REAL_RESV_ST_HM >= #{real_resv_st_hm}) AND (REAL_RESV_ST_HM &lt; #{real_resv_end_hm}))  OR	--시작시간이 확인대상시간보다 큰경우
+					((REAL_RESV_END_HM >  #{real_resv_st_hm}) AND (REAL_RESV_END_HM &lt;= #{real_resv_end_hm})))  --종료시간이 확인대상시간 작은경우
+					)		
+			AND		STAT_CD = '10'    -- 예약 접수만 체크
+			UNION
+			SELECT	'2'
+    		FROM	LPM_SVC_RESV
+			WHERE	SHOP_CD = #{shop_cd}
+			AND		REAL_RESV_DATE = #{real_resv_date}
+			AND		RESV_STALL_NO = #{resv_stall_no}
+			AND 	((((#{real_resv_st_hm} >= REAL_RESV_ST_HM) AND (#{real_resv_st_hm} &lt; REAL_RESV_END_HM))  OR	--시작시간이 확인대상시간의 중간에 걸치는 경우
+					((#{real_resv_end_hm} >  REAL_RESV_ST_HM) AND (#{real_resv_end_hm} &lt;= REAL_RESV_END_HM)))   --종료시간이 확인대상시간의 중간에 걸치는 경우
+					OR
+					(((REAL_RESV_ST_HM >= #{real_resv_st_hm}) AND (REAL_RESV_ST_HM &lt; #{real_resv_end_hm}))  OR	--시작시간이 확인대상시간보다 큰경우
+					((REAL_RESV_END_HM >  #{real_resv_st_hm}) AND (REAL_RESV_END_HM &lt;= #{real_resv_end_hm})))  --종료시간이 확인대상시간 작은경우
+					)		
+			AND		STAT_CD = '01'
+    	) A
+		
+    </select>
+    
+    <select id="selectResvChkDuplication" parameterType="se.app.svc.resv.ResvRegistDto" resultType="int">
+    	/*
+    	LPM_SVC_RESV 상태
+    	'01' : '예약요청'
+		'02' : '예약실패'
+		'10' : '온라인 예약요청'
+		'90' : '온라인 예약취소요청'
+		'91' : '취소요청'
+		'92' : '취소실패'
+    	*/
+    	SELECT	COUNT(*)
+		FROM    (
+			SELECT	A.*
+			FROM	LPM_SVC_RESV A 
+			WHERE	VIN=#{vin}
+		) A
+		FULL OUTER JOIN (
+				SELECT	SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+				FROM 	(
+					SELECT  ROW_NUMBER() OVER (ORDER BY RESV_DT DESC, RESV_SEQ DESC) RNUM, SHOP_CD, VARIANT_NM, VEHIC_NO1, VEHIC_NO2, REAL_RESV_DATE, REAL_RESV_ST_HM, REAL_RESV_END_HM, SVC_TYPE_CD, STAT_CD, VIN, RESV_DT, RESV_SEQ, REG_DT, RESV_ILDP_SEQ
+					FROM    SVC_RESV
+					WHERE   VIN=#{vin}
+				) A
+		)B ON A.SEQ=B.RESV_ILDP_SEQ
+		WHERE	(				
+				(A.STAT_CD = '01'  AND B.STAT_CD &lt; '20')
+				OR 
+				((A.STAT_CD = '10' OR A.STAT_CD = '91') AND ( B.STAT_CD = '10' AND  B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD') ))
+				OR
+				(A.STAT_CD IS NULL AND ( B.STAT_CD = '10' AND B.REAL_RESV_DATE = to_char(NOW(), 'YYYYMMDD') ))
+		)
+		AND (B.REAL_RESV_DATE IS NOT NULL OR B.RESV_ILDP_SEQ IS NOT NULL)
+    </select>
+    
+    <select id="selectLastVisitSvc" parameterType="se.app.svc.resv.ResvDto" resultType="se.app.svc.resv.ResvDto">
+    	SELECT  SHOP_CD
+				, B.GROUP_NAME SHOP_NM
+		FROM    (SELECT  ROW_NUMBER() OVER (ORDER BY REG_DT DESC) RNUM, SHOP_CD
+				 FROM    SVC_PROPO
+				 WHERE   VIN=#{vin}
+		) A
+		INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+		WHERE   RNUM=1
+    </select>
+    
+    <select id="selectUsableTimeList" parameterType="se.app.svc.resv.UsableTimeDto" resultType="se.app.svc.resv.UsableTimeResultDto">
+	  	SELECT	HH_MM, STALL_NO
+		FROM	(
+			SELECT	HH_MM, STALL_NO
+			FROM	TIMETABLE A
+			INNER JOIN (
+				SELECT	B.WORK_ST_HM AS ST_HM
+						, B.WORK_END_HM AS END_HM
+						, A.STALL_NO
+				FROM SVC_STALL A, SVC_STALL_WORKTIME B, CO_USERS C
+					 , CO_CODE D, SVC_WORKDATE E
+				WHERE A.STALL_NO = B.STALL_NO
+				  AND A.SHOP_CD = B.SHOP_CD
+				  AND A.SA_ID = C.USER_ID
+				  AND A.STALL_TYPE_CD = D.CODE
+				  AND A.SHOP_CD = E.SHOP_CD
+				  AND B.WORK_DATE = E.WORK_DATE
+				  AND D.CODE_TYPE = 'SV0240'   --스톨유형
+				  AND A.SHOP_CD   = #{shop_cd}
+				  AND B.WORK_DATE = #{resv_date}
+				  AND B.OPER_YN   = 'Y'
+				  AND A.USE_YN    = 'Y'
+				  AND A.RESV_YN   = 'Y'
+				  AND A.LPM_RESV_YN='Y'
+				  AND E.OFFDAY_YN='N'
+			) B ON hh_mm BETWEEN ST_HM AND END_HM
+		) A
+		WHERE (HH_MM, STALL_NO) NOT IN (
+			SELECT	HH_MM,  STALL_NO
+			FROM	TIMETABLE A
+			INNER JOIN (
+					SELECT CASE WHEN SUBSTRING(A.REAL_RESV_ST_HM,3)::INTEGER >= 30 THEN SUBSTRING(A.REAL_RESV_ST_HM,0,3)||'30'
+							 ELSE SUBSTRING(A.REAL_RESV_ST_HM,0,3)||'00'
+							 END ST_HM
+						  , CASE WHEN SUBSTRING(A.REAL_RESV_END_HM,3)::INTEGER = 0 THEN TO_CHAR(to_timestamp(SUBSTRING(A.REAL_RESV_END_HM,0,3), 'HH24') - interval '1 hour', 'HH24')||'30'
+								WHEN SUBSTRING(A.REAL_RESV_END_HM,3)::INTEGER &lt;= 30 THEN SUBSTRING(A.REAL_RESV_END_HM,0,3)||'00'
+								ELSE  SUBSTRING(A.REAL_RESV_END_HM,0,3)||'30'
+								END END_HM
+						 , STALL_NO
+					FROM (
+						SELECT A.REAL_RESV_ST_HM
+							   , REAL_RESV_END_HM 
+							   , RESV_STALL_NO STALL_NO
+						FROM SVC_RESV A
+						WHERE A.SHOP_CD = #{shop_cd}
+						AND A.REAL_RESV_DATE = #{resv_date}
+						AND A.STAT_CD IN('10', '20', '80', '70' ,'25')	
+						AND NOT EXISTS ( SELECT 1 FROM SVC_PROPO B 
+									   WHERE  B.SHOP_CD = A.SHOP_CD             AND  B.PROPO_DT = A.PROPO_DT             AND  B.PROPO_SEQ = A.PROPO_SEQ 
+										 AND  B.STAT_CD >= '20'
+									 )
+						UNION
+						SELECT A.ST_HM
+					           , A.END_HM
+							   , STALL_NO
+						FROM (
+							SELECT  TO_CHAR(A.EXPT_ST_DT,'HH24MI')    AS ST_HM
+									, TO_CHAR(A.EXPT_END_DT,'HH24MI')   AS END_HM
+									, STALL_NO
+								FROM SVC_PROC_TIME A
+								WHERE A.SHOP_CD = #{shop_cd}
+									 AND A.EXPT_ST_DT::text LIKE #{resv_date_dateformat}||'%'
+									AND A.STAT_CD IN('50', '55')	
+									AND EXISTS ( SELECT 1 FROM SVC_PROPO B 
+												 WHERE B.SHOP_CD = A.SHOP_CD             AND B.PROPO_DT = A.PROPO_DT             AND B.PROPO_SEQ = A.PROPO_SEQ 
+												   AND (B.STAT_CD >= '30' AND B.STAT_CD &lt; '50')
+											   )
+							UNION ALL
+							SELECT	TO_CHAR(A.REAL_ST_DT,'HH24MI')    AS ST_HM
+									, TO_CHAR(A.EXPT_END_DT,'HH24MI')   AS END_HM
+									, STALL_NO
+							FROM SVC_PROC_TIME A
+							WHERE A.SHOP_CD = #{shop_cd}
+								 AND A.REAL_ST_DT::text LIKE #{resv_date_dateformat}||'%'
+								AND A.STAT_CD IN ('60','70')	-- 작업시작, 작업보
+								AND EXISTS ( SELECT 1 FROM SVC_PROPO B 
+											 WHERE B.SHOP_CD = A.SHOP_CD             AND B.PROPO_DT = A.PROPO_DT             AND B.PROPO_SEQ = A.PROPO_SEQ 
+											   AND (B.STAT_CD >= '30' AND B.STAT_CD &lt; '50')
+										   )
+						) A
+					UNION
+					SELECT A.ST_HM
+						  , A.END_HM
+						  , STALL_NO
+					FROM (
+						SELECT TO_CHAR(A.WORK_EXPT_ST_DT,'HH24MI')    AS ST_HM
+							, TO_CHAR(A.WORK_EXPT_END_DT,'HH24MI')   AS END_HM
+						    , STALL_NO
+						FROM SVC_PROPO A
+						WHERE A.SHOP_CD = #{shop_cd}
+							AND A.STAT_CD = '20'
+							AND A.WORK_EXPT_ST_DT::text like #{resv_date_dateformat}||'%'
+					) A
+					UNION
+					SELECT A.WORK_ST_HM
+						   ,A.WORK_END_HM
+						   , STALL_NO
+					FROM SVC_STALL_BLOCKING A
+					WHERE SHOP_CD = #{shop_cd}
+						AND WORK_DATE = #{resv_date}
+						AND USE_YN = 'Y'
+				) A
+			)B ON A.HH_MM BETWEEN B.ST_HM AND B.END_HM AND STALL_NO IS NOT NULL
+	)
+	ORDER BY HH_MM, STALL_NO
+    </select>
+    <select id="selectResvStatusSearch" parameterType="se.app.svc.resv.ResvStatusSearchDto" resultType="se.app.svc.resv.ResvStatusSearchDto">
+	    SELECT  B.LPM_SHOP_CD         AS SHOP_CD
+		        ,B.LPM_RESV_DT         AS RESV_DT
+		        ,B.LPM_RESV_SEQ     AS RESV_SEQ
+		        ,B.LPM_CUST_REPS_CD AS STAT_CD  --50    신청 70    확정  99    취소
+		        ,C.CODE_NM            AS STAT_NM
+		FROM LPM_SVC_RESV A
+		INNER JOIN LPM_ACTIVE_SVC B ON A.SEQ = B.RESV_ILDP_SEQ AND A.VIN = B.VIN
+		LEFT OUTER JOIN CO_CODE C ON B.LPM_CUST_REPS_CD = C.CODE AND C.CODE_TYPE = 'LPM002' AND C.USE_YN ='Y'
+		WHERE A.VIN =#{vin}
+    </select>
+</mapper>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.AdminSvcEnterMapper">
+    <select id="selectSvcEnterList" resultType="se.app.admin.svcEnter.AdminSvcEnterDto">
+	    SELECT C.CUST_NM
+			    , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV01010' AND CODE = D.SVC_TYPE_CD) AS SVC_TYPE_NM
+			    , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV0020' AND CODE = STAT_CD) AS PROPO_STAT_NM
+		FROM CU_BASE C
+		INNER JOIN SVC_PROPO D ON C.CUST_SEQ=D.CUST_SEQ
+		WHERE 1=1
+		AND D.SHOP_CD=#{shop_cd}
+		AND D.PROPO_DT BETWEEN #{start_dt} AND #{end_dt}
+	    
+    	<!-- SELECT C.CUST_NM
+		    , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV01010' AND CODE = D.SVC_TYPE_CD) AS SVC_TYPE_NM
+		    , (SELECT CODE_NM FROM CO_CODE WHERE CODE_TYPE = 'SV0020' AND CODE = STAT_CD) AS PROPO_STAT_NM
+		FROM CI_CUST A
+		INNER JOIN (
+		    SELECT ROW_NUMBER() OVER(ORDER BY REG_DT DESC) RN, CCL.* FROM CI_CUST_LPM CCL WHERE USE_YN='Y' AND LPM_USER_NO = #{lpm_user_no}
+		) B ON A.CI_SEQ=B.CI_SEQ  AND RN=1
+		INNER JOIN CU_BASE C ON A.CI_SEQ=C.CI_SEQ
+		INNER JOIN SVC_PROPO D ON C.CUST_SEQ=D.CUST_SEQ
+		WHERE 1=1
+		AND D.PROPO_DT BETWEEN #{start_dt} AND #{end_dt} -->
+    </select>
+</mapper>

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.SvcCouponMapper">
+    <select id="selectFmsList" parameterType="se.app.svc.coupon.FmsListDto" resultType="se.app.svc.coupon.FmsListDto">
+		SELECT  D.PT_TYPE AS COUPON_TYPE
+		        ,( SELECT CODE_NM 
+		          FROM CO_CODE 
+		          WHERE CODE_TYPE ='SV09002' 
+		          AND CODE = D.PT_TYPE ) AS COUPON_TYPE_NM
+		        ,B.ITEM_TYPE
+		        ,E.PM_NM
+		        ,CASE    WHEN B.ITEM_TYPE='1' THEN '무상점검'
+		                 WHEN B.ITEM_TYPE='2' THEN '엔진오일 및 오일필터 교환'
+		                 WHEN B.ITEM_TYPE='5' THEN '엔진 에어 클리너 교환'
+		                 WHEN B.ITEM_TYPE='4' THEN '브레이크 패드 앞 교환'
+		                 WHEN B.ITEM_TYPE='3' THEN '브레이크 패드 뒤 교환'
+		            ELSE ''
+		        END ITEM_TYPE_NM
+		        ,B.FMS_ITEM_NM
+		        ,A.APPLY_ST_DATE
+		        ,A.APPLY_END_DATE
+		        ,CASE WHEN A.EXEC_YN ='Y' THEN
+		            (SELECT GROUP_NAME FROM CO_GROUP WHERE GROUP_ID = A.SHOP_CD)
+		        ELSE 
+		            ''
+		        END AS EXEC_SHOP_NM
+		        ,A.EXEC_YN
+		        ,CASE WHEN A.EXEC_YN ='Y' THEN
+		            A.EXEC_DATE
+		        ELSE 
+		            ''
+		        END AS EXEC_DATE
+		        ,A.CAN_USE_YN
+		FROM    SVC_FMS A
+		        ,PM_FMS_ITEM_NEW B
+		        ,PM_PLAN C
+		        ,PM_PTMASTER_NEW D
+		        ,PM_CATEGORY E
+		WHERE   A.FMS_ITEM_CD=B.FMS_ITEM_CD
+		AND     A.PM_CODE = C.PM_CODE
+		AND     A.PM_SEQ = C.PM_SEQ
+		AND     C.PT_CODE = D.PT_CODE
+		AND     A.PM_CODE = E.PM_CODE  
+		AND     VIN=#{vin}
+		ORDER BY B.ITEM_TYPE
+	</select> 
+	
+	<select id="selectPromotionFmsList" parameterType="se.app.svc.coupon.FmsListDto" resultType="se.app.svc.coupon.FmsListDto">
+     SELECT PC.PM_GROUP_CODE 
+           , PPN.PT_TYPE AS COUPON_TYPE
+           ,( SELECT CODE_NM 
+             FROM CO_CODE 
+             WHERE CODE_TYPE ='SV09002' 
+             AND CODE = PPN.PT_TYPE ) AS COUPON_TYPE_NM
+           ,PFIN.ITEM_TYPE
+           ,PC.PM_NM
+           ,CASE    WHEN PFIN.ITEM_TYPE='1' THEN '무상점검'
+                    WHEN PFIN.ITEM_TYPE='2' THEN '엔진오일 및 오일필터 교환'
+                    WHEN PFIN.ITEM_TYPE='5' THEN '엔진 에어 클리너 교환'
+                    WHEN PFIN.ITEM_TYPE='4' THEN '브레이크 패드 앞 교환'
+                    WHEN PFIN.ITEM_TYPE='3' THEN '브레이크 패드 뒤 교환'
+               ELSE ''
+           END ITEM_TYPE_NM
+           ,PFIN.FMS_ITEM_NM
+           ,SF.APPLY_ST_DATE
+           ,SF.APPLY_END_DATE
+           ,CASE WHEN SF.EXEC_YN ='Y' THEN
+               (SELECT GROUP_NAME FROM CO_GROUP WHERE GROUP_ID = SF.SHOP_CD)
+           ELSE 
+               ''
+           END AS EXEC_SHOP_NM
+           ,SF.EXEC_YN
+           ,CASE WHEN SF.EXEC_YN ='Y' THEN
+               SF.EXEC_DATE
+           ELSE 
+               ''
+           END AS EXEC_DATE
+           ,SF.CAN_USE_YN
+       FROM PM_CATEGORY PC 
+           INNER JOIN PM_PLAN PP ON (PC.PM_CODE = PP.PM_CODE)
+           INNER JOIN PM_PTMASTER_NEW PPN ON ( PP.PT_CODE = PPN.PT_CODE)
+           INNER JOIN (			SELECT DISTINCT X.VIN,Y.PM_CODE,Y.PM_SEQ FROM OM_CONTRACT X , PM_PLAN_DEALER Y
+	                        	WHERE X.CONTRACT_NO = Y.CONTRACT_NO
+	                        	AND X.VIN = #{vin}
+	                        UNION
+		                        SELECT DISTINCT VIN,PM_CODE,PM_SEQ FROM SVC_FMS 
+		                        WHERE VIN = #{vin} 
+	                   )  
+               	PPD ON (PP.PM_CODE = PPD.PM_CODE AND PP.PM_SEQ = PPD.PM_SEQ)
+           INNER JOIN OM_CONTRACT OC  ON ( PPD.VIN = OC.VIN)
+           LEFT JOIN SVC_FMS SF ON (OC.VIN = SF.VIN ) 
+                               AND (PPD.PM_CODE = SF.PM_CODE AND PPD.PM_SEQ = SF.PM_SEQ )
+           LEFT JOIN PM_FMS_ITEM_NEW PFIN ON (SF.FMS_ITEM_CD = PFIN.FMS_ITEM_CD )
+        WHERE 1=1  
+        AND OC.CONTRACT_STAT_CD ='D4'
+        AND OC.VIN = #{vin}
+        ORDER BY PC.PM_GROUP_CODE,PPN.PT_TYPE,PFIN.ITEM_TYPE
+     </select> 
+	
+    <select id="selectPspList" parameterType="se.app.svc.coupon.PspListDto" resultType="se.app.svc.coupon.PspListDto">
+		SELECT C.PSP_ITEM_NM 
+		        ,B.APPLY_ST_DATE
+		        ,B.APPLY_END_DATE
+		        ,CASE WHEN B.EXEC_YN ='Y' THEN
+		            (SELECT GROUP_NAME FROM CO_GROUP WHERE GROUP_ID = B.SHOP_CD)
+		        ELSE 
+		            ''
+		        END AS EXEC_SHOP_NM
+		        ,B.EXEC_YN
+		        ,B.EXEC_DATE
+		        ,B.CAN_USE_YN
+		FROM PSP_SALES A,SVC_PSP B, PSP_ITEM C              
+		WHERE A.VIN = B.VIN  
+		AND A.PSP_CODE = B.PSP_CODE
+		AND B.PSP_ITEM_CD = C.PSP_ITEM_CD
+		AND A.PSP_SALES_STATE = '1'
+		AND A.VIN =#{vin}
+		ORDER BY B.PSP_ITEM_CD
+	</select>    
+	
+</mapper>

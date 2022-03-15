@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.AdminCommonMapper">
+    <select id="selectVehicList" resultType="se.app.admin.common.AdminVehicDto">
+    	SELECT A.BRAND_CD
+		    , A.BRAND_NM   
+		    , A.MODEL_CD
+		    , A.MODEL_NM
+		    , A.VARIANT_CD
+		    , A.VARIANT_NM
+		    , A.MY_CD
+		    , A.MODEL_YEAR
+		    , A.SFX_CD
+		    , A.SFX_NM  
+		FROM VS_SFX A
+		INNER JOIN VS_VARIANT B ON A.VARIANT_CD = B.VARIANT_CD
+		WHERE 1=1
+		AND A.BRAND_CD = 'L'
+		AND (B.SALES_YN='Y' OR B.ORDER_YN='Y')
+		AND CURR_SALES_YN='Y'
+		ORDER BY A.CURR_SALES_YN DESC, A.DISPLAY_ORDER, MODEL_YEAR
+    </select>
+    
+    <select id="selectSvcCenterList" resultType="se.app.admin.common.AdminSvcCenterDto">
+    	SELECT GROUP_ID
+			, GROUP_NAME
+		FROM CO_GROUP
+		WHERE GROUP_TYPE = 'P'
+		AND USE_YN = 'Y'
+		AND SERVICE_YN = 'Y'
+		AND	SYSTEM_USE_YN='Y'
+		AND	GROUP_ID NOT IN ('DY30101', 'DY30102')
+    </select>
+    
+    <select id="selectShowRoomList" resultType="se.app.admin.common.AdminShowRoomDto">
+    	SELECT GROUP_ID
+		    , GROUP_NAME
+		FROM CO_GROUP
+		WHERE GROUP_TYPE IN ('S','W')
+		AND	GROUP_ID NOT IN ('TM00000')
+		AND	SYSTEM_USE_YN='Y'
+		AND USE_YN = 'Y'
+    </select>
+</mapper>

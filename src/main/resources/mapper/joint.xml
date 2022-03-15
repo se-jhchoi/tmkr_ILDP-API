@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.JointMapper">
+    <select id="selectJointInvalidChk" parameterType="se.app.customer.joint.JointDto" resultType="se.common.Param2Dto">
+    	SELECT (SELECT CASE WHEN (SELECT PASS_KEY
+					        FROM (
+					            SELECT PASS_KEY
+					                , ROW_NUMBER() OVER(PARTITION BY 1 ORDER BY CI_SEQ DESC) AS TN
+					            FROM CI_CUST
+					            WHERE CUST_KND = 'P'    -- 개인
+					                AND CUST_NM  = REPLACE(#{cust_nm}, ' ','')
+					                AND CUST_KEY = REPLACE(#{hp_no}, '-', '')
+					     ) A WHERE TN = 1) IS NOT NULL 
+					     AND
+					     (SELECT PASS_KEY
+					        FROM (
+					            SELECT PASS_KEY
+					                , ROW_NUMBER() OVER(PARTITION BY 1 ORDER BY CI_SEQ DESC) AS TN
+					            FROM CI_CUST
+					            WHERE CUST_KND = 'P'    -- 개인
+					                AND CUST_NM  = REPLACE(#{cust_nm}, ' ','')
+					                AND CUST_KEY = REPLACE(#{hp_no}, '-', '')
+					     ) A WHERE TN = 1) != #{pass_key} 
+					THEN 1
+					ELSE 0 
+					END  PARAM1) PARAM1
+			 , (SELECT COUNT(*) FROM CI_CUST_LPM WHERE LPM_USER_NO=#{lpm_user_no}::numeric AND USE_YN='N') PARAM2
+			 , (SELECT COUNT(*) FROM CI_CUST_LPM WHERE LPM_USER_NO=#{up_lpm_user_no}::numeric AND USE_YN='Y') PARAM3
+			 , (SELECT COUNT(*) FROM CU_BASE WHERE CI_SEQ IN (SELECT CI_SEQ FROM CI_CUST_LPM WHERE LPM_USER_NO=#{up_lpm_user_no}::numeric) AND DEALER_ID=#{up_dealer_id}) PARAM4
+    </select>
+    
+    <select id="selectJointRemoveInvalidChk" parameterType="se.app.customer.joint.JointDto" resultType="se.common.Param2Dto">
+    	SELECT	COUNT(*) PARAM1
+    	FROM	CI_CUST_LPM_JOINT
+    	WHERE	LPM_USER_NO=#{lpm_user_no}::numeric
+		AND		UP_LPM_USER_NO=#{up_lpm_user_no}::numeric
+		AND		USE_YN='Y'
+    </select>
+</mapper>

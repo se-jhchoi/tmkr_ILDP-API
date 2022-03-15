@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.CommonMapper">
+    <insert id="insertRequestLog" parameterType="se.common.RequestLogDto">
+    <selectKey keyProperty="log_seq" resultType="int" order="BEFORE">
+		SELECT nextval('com_log_seq')
+	</selectKey>
+		INSERT INTO com_log
+		(log_seq, req_user_id, req_protocol, req_contexttype, req_method, req_path, req_data, req_dt, reg_user_id, reg_dt) 
+		VALUES
+		(#{log_seq}, #{req_user_id}, #{req_protocol}, #{req_contexttype}, #{req_method}, #{req_path}, #{req_data}, NOW(), 'SYSTEM', NOW())
+    </insert>
+    
+    <update id="updateRequestLog" parameterType="se.common.ResponseLogDto">
+    	UPDATE 	com_log
+    	SET		res_data=#{res_data}
+    			,res_dt=NOW()
+    			,sys_log=#{sys_log}
+    			,upd_dt=NOW()
+    			,upd_user_id='SYSTEM'
+    	WHERE	log_seq=#{log_seq}
+    </update>
+    
+    <insert id="insertInterfaceMaster" parameterType="se.common.InterfaceMasterDto">
+    <selectKey keyProperty="if_seq" resultType="int" order="BEFORE">
+		SELECT nextval('if_master_seq')
+	</selectKey>
+		INSERT INTO if_master
+		(if_seq, if_type, if_data, if_action_yn, reg_userid, reg_dt) 
+		VALUES
+		(#{if_seq}, #{if_type}, #{if_data}, 'N', 'SYSTEM', NOW())
+    </insert>
+    
+    <select id="selectUCarCHK" parameterType="se.common.SearchDateDto" resultType="int">
+    	SELECT	COUNT(*)
+		FROM    CU_BASE A
+		INNER JOIN CI_CUST_LPM B ON A.CI_SEQ=B.CI_SEQ
+		INNER JOIN CO_V_LINK C ON A.CUST_SEQ=C.CUST_SEQ
+		WHERE	VIN=#{vin}
+		AND		C.UCAR_YN='Y'
+		AND     B.LPM_USER_NO=#{lpm_user_no}::numeric
+    </select>
+    
+    <select id="selectSearchDataAsLPMUser1" parameterType="se.common.SearchDateDto" resultType="se.common.SearchDateDto">
+    	SELECT	null START_DT, UCAR_PURCHASE_DT END_DT
+		FROM	(
+			SELECT	ROW_NUMBER() OVER(ORDER BY C.REG_DT) RNUM, C.*
+			FROM    CU_BASE A
+			INNER JOIN CI_CUST_LPM B ON A.CI_SEQ=B.CI_SEQ
+			INNER JOIN CO_V_LINK C ON A.CUST_SEQ=C.CUST_SEQ
+			WHERE	VIN=#{vin}
+			AND		UCAR_YN='Y'
+		) A
+		WHERE RNUM=1
+    </select>
+    
+    <select id="selectSearchDataAsLPMUser2" parameterType="se.common.SearchDateDto" resultType="se.common.SearchDateDto">
+    	SELECT    MIN(UCAR_PURCHASE_DT) START_DT, MAX(COALESCE(COALESCE(UCAR_SALES_DT, NEXT_PURCHASE_DT), NEXT_SALES_DT)) END_DT
+		FROM(
+			SELECT	B.LPM_USER_NO, C.UCAR_PURCHASE_DT, C.UCAR_SALES_DT, LEAD(UCAR_PURCHASE_DT,1) over v NEXT_PURCHASE_DT, LEAD(UCAR_SALES_DT,1) over v NEXT_SALES_DT
+			FROM    CU_BASE A
+			INNER JOIN CI_CUST_LPM B ON A.CI_SEQ=B.CI_SEQ
+			INNER JOIN CO_V_LINK C ON A.CUST_SEQ=C.CUST_SEQ
+			WHERE	VIN=#{vin}
+			AND		(UCAR_PURCHASE_DT IS NOT NULL OR UCAR_SALES_DT IS NOT NULL)
+			AND		UCAR_YN='Y'
+			WINDOW v as (partition by C.VIN ORDER BY C.REG_DT)
+			ORDER BY C.REG_DT
+		) A
+		WHERE     A.LPM_USER_NO=#{lpm_user_no}::numeric
+    </select>
+    
+    <select id="selectLPMDupliChk" parameterType="se.common.SearchDateDto" resultType="int">
+    	SELECT	COUNT(*)
+    	FROM	CI_CUST_LPM
+    	WHERE	LPM_USER_NO=#{lpm_user_no}::numeric
+    </select>
+    
+    <select id="selectLPMUserYCnt" parameterType="String" resultType="int">
+    	SELECT	COUNT(*)
+    	FROM	CI_CUST_LPM
+    	WHERE	LPM_USER_NO=#{lpm_user_no}::numeric
+    	AND		USE_YN='Y'
+    </select>
+    
+    <select id="selectLPMUpUserYN" parameterType="se.common.SearchDateDto" resultType="int">
+    	SELECT  COUNT(*)
+	    FROM    CI_CUST_LPM A
+	    INNER JOIN CU_BASE B ON A.CI_SEQ=B.CI_SEQ
+	    WHERE   A.LPM_USER_NO=#{up_lpm_user_no}::numeric
+	    AND     B.DEALER_ID=#{up_dealer_id}
+	    AND		A.USE_YN='Y'
+    </select>
+</mapper>

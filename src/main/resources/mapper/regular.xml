@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.RegularMapper">
+    <select id="selectRegularVehicInfo" parameterType="se.app.customer.regular.RegularDto" resultType="se.app.customer.regular.RegularDto">
+    	SELECT   B.CUST_NM
+                , B.CUST_SEQ
+                , REGEXP_REPLACE(REPLACE(B.HP_AREA||B.HP_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') HP_NO
+                , (SELECT NAME FROM CO_USERS WHERE USER_ID = B.MNG_SC_ID) AS MNG_SC_ID
+                , (SELECT REGEXP_REPLACE(REPLACE(HP_AREA||HP_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') FROM CO_USERS WHERE USER_ID = B.MNG_SC_ID) MNG_SC_HP
+    			, G.VEHIC_NO1||G.VEHIC_NO2 VEHIC_NO
+    			, A.VIN
+    			, E.BRAND_NM
+                , E.MODEL_NM
+                , E.VARIANT_NM
+                , E.MY_CD MODEL_YEAR
+                , E.SFX_NM
+                , E.COL_COMBI_CD
+                , E.COL_COMBI_NM
+    			, D.GROUP_NAME
+    			, D.GROUP_ID
+                , REGEXP_REPLACE(REPLACE(D.TEL_AREA||D.TEL_NO,'-',''), '(.{3})(.+)(.{4})', '\1-\2-\3') GROUP_TELL_NO
+                , C.CONTRACT_STAT_CD
+				, F.CODE_NM CONTRACT_STAT_NM
+				, C.DLR_CONTRACT_NO
+				, B.DEALER_ID
+		FROM    (
+			SELECT  A.VIN, A.CUST_SEQ, A.VEHIC_NO1, A.VEHIC_NO2, A.UCAR_YN_CHK
+			FROM	(
+			    SELECT  ROW_NUMBER() OVER(PARTITION BY B.VIN ORDER BY A.REG_DT ASC) RNUM, B.*, 'N' UCAR_YN_CHK
+			    FROM    OM_CONTRACT A
+				INNER JOIN CO_V_LINK B ON A.VIN=B.VIN AND A.CUST_SEQ=B.CUST_SEQ AND A.CONTRACT_STAT_CD='D4'
+			    WHERE   COALESCE(UCAR_YN,'N')!='Y'
+			    AND		B.VIN IN (
+			    	<choose>
+			    		<when test='vehic_no!=null and vehic_no!=""'>
+			    			SELECT  A.VIN
+						    FROM    CO_V_LINK A
+						    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						    INNER JOIN CO_VEHIC C ON A.VIN=C.VIN
+						    WHERE   1=1
+			    			AND		C.VEHIC_NO1||C.VEHIC_NO2=#{vehic_no}
+			    			AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+			    		</when>
+			    		<otherwise>
+			    			SELECT  A.VIN
+						    FROM    CO_V_LINK A
+						    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						    WHERE   1=1
+						    <if test='search_type == "HC"'>
+								AND		REPLACE(REPLACE(REPLACE(B.CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+								AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+						    </if>
+						    <if test='search_type == "HV"'>
+						    	AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+						    	<if test='vin!=null and vin!=""'>
+								AND		A.VIN=#{vin}
+								</if>
+						    </if>
+			    		</otherwise>
+			    	</choose>
+			    )
+			    AND		(SELECT COUNT(*) FROM CO_V_LINK WHERE VIN=B.VIN AND UCAR_YN='Y') = 0
+			    UNION
+			    SELECT  ROW_NUMBER() OVER(PARTITION BY VIN ORDER BY A.UCAR_PURCHASE_DT DESC, A.REG_DT DESC) RNUM, A.*, 'Y' UCAR_YN_CHK
+			    FROM    CO_V_LINK A
+			    WHERE   COALESCE(UCAR_YN,'N')='Y'
+			    AND		A.VIN IN (
+			    	<choose>
+			    		<when test='vehic_no!=null and vehic_no!=""'>
+			    			SELECT  A.VIN
+						    FROM    CO_V_LINK A
+						    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						    INNER JOIN CO_VEHIC C ON A.VIN=C.VIN
+						    WHERE   1=1
+			    			AND		C.VEHIC_NO1||C.VEHIC_NO2=#{vehic_no}
+			    			AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+			    		</when>
+			    		<otherwise>
+			    			SELECT  A.VIN
+						    FROM    CO_V_LINK A
+						    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						    WHERE   1=1
+						    <if test='search_type == "HC"'>
+								AND		REPLACE(REPLACE(REPLACE(B.CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+								AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+						    </if>
+						    <if test='search_type == "HV"'>
+						    	AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+								AND		A.VIN=#{vin}
+						    </if>
+			    		</otherwise>
+			    	</choose>
+			    )
+			) A
+			INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+			WHERE	RNUM=1
+			AND		A.CUST_SEQ IN (
+			    <choose>
+		    		<when test='vehic_no!=null and vehic_no!=""'>
+		    			SELECT  A.CUST_SEQ
+					    FROM    CO_V_LINK A
+					    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+					    INNER JOIN CO_VEHIC C ON A.VIN=C.VIN
+					    WHERE   1=1
+		    			AND		C.VEHIC_NO1||C.VEHIC_NO2=#{vehic_no}
+		    			AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+		    		</when>
+		    		<otherwise>
+		    			SELECT  A.CUST_SEQ
+					    FROM    CO_V_LINK A
+					    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+					    WHERE   1=1
+					    <if test='search_type == "HC"'>
+							AND		REPLACE(REPLACE(REPLACE(B.CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+							AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+					    </if>
+					    <if test='search_type == "HV"'>
+					    	AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '')
+					    	<if test='vin!=null and vin!=""'>
+							AND		A.VIN=#{vin}
+							</if>
+					    </if>
+		    		</otherwise>
+		    	</choose>
+		    )
+		) A
+		INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+		INNER JOIN OM_CONTRACT C ON A.VIN=C.VIN AND C.CONTRACT_STAT_CD='D4'
+		INNER JOIN CO_GROUP D ON C.SHOP_CD=D.GROUP_ID
+		INNER JOIN VS_COLOR E ON C.BRAND_CD=E.BRAND_CD AND C.MODEL_CD=E.MODEL_CD AND C.VARIANT_CD=E.VARIANT_CD AND C.MY_CD=E.MY_CD AND C.SFX_CD=E.SFX_CD AND C.COL_COMBI_CD = E.COL_COMBI_CD
+		INNER JOIN CO_CODE F ON C.CONTRACT_STAT_CD=F.CODE AND CODE_TYPE='SA0001'
+		INNER JOIN CO_VEHIC G ON A.VIN=G.VIN
+    </select>
+    
+    <select id="selectRegularVehicInfo4PASSKEY" parameterType="se.app.customer.regular.RegularDto" resultType="se.app.customer.regular.RegularDto">
+    	SELECT   B.CUST_NM
+                , B.CUST_SEQ
+                , REGEXP_REPLACE(REPLACE(B.HP_AREA||B.HP_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') HP_NO
+                , (SELECT NAME FROM CO_USERS WHERE USER_ID = B.MNG_SC_ID) AS MNG_SC_ID
+                , (SELECT REGEXP_REPLACE(REPLACE(HP_AREA||HP_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') FROM CO_USERS WHERE USER_ID = B.MNG_SC_ID) MNG_SC_HP
+    			, G.VEHIC_NO1||G.VEHIC_NO2 VEHIC_NO
+    			, A.VIN
+    			, E.BRAND_NM
+                , E.MODEL_NM
+                , E.VARIANT_NM
+                , E.MY_CD MODEL_YEAR
+                , E.SFX_NM
+                , E.COL_COMBI_CD
+                , E.COL_COMBI_NM
+    			, D.GROUP_NAME
+    			, D.GROUP_ID
+                , REGEXP_REPLACE(REPLACE(D.TEL_AREA||D.TEL_NO,'-',''), '(.{3})(.+)(.{4})', '\1-\2-\3') GROUP_TELL_NO
+                , C.CONTRACT_STAT_CD
+				, F.CODE_NM CONTRACT_STAT_NM
+				, C.DLR_CONTRACT_NO
+				, B.DEALER_ID
+		FROM    (
+			SELECT  A.VIN, A.CUST_SEQ, A.VEHIC_NO1, A.VEHIC_NO2, A.UCAR_YN_CHK
+			FROM	(
+			    SELECT  ROW_NUMBER() OVER(PARTITION BY B.VIN ORDER BY A.REG_DT ASC) RNUM, B.*, 'N' UCAR_YN_CHK
+			    FROM    OM_CONTRACT A
+				INNER JOIN CO_V_LINK B ON A.VIN=B.VIN AND A.CUST_SEQ=B.CUST_SEQ AND A.CONTRACT_STAT_CD='D4'
+			    WHERE   COALESCE(UCAR_YN,'N')!='Y'
+			    AND		B.VIN IN (
+			    	SELECT  A.VIN
+				    FROM    CO_V_LINK A
+				    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+				    INNER JOIN CI_CUST C ON B.CI_SEQ=C.CI_SEQ
+				    WHERE   1=1
+					AND		C.PASS_KEY=#{pass_key}
+			    )
+			    AND		(SELECT COUNT(*) FROM CO_V_LINK WHERE VIN=B.VIN AND UCAR_YN='Y') = 0
+			    UNION
+			    SELECT  ROW_NUMBER() OVER(PARTITION BY VIN ORDER BY A.UCAR_PURCHASE_DT DESC, A.REG_DT DESC) RNUM, A.*, 'Y' UCAR_YN_CHK
+			    FROM    CO_V_LINK A
+			    WHERE   COALESCE(UCAR_YN,'N')='Y'
+			    AND		A.VIN IN (
+			    	SELECT  A.VIN
+				    FROM    CO_V_LINK A
+				    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+					INNER JOIN CI_CUST C ON B.CI_SEQ=C.CI_SEQ
+				    WHERE   1=1
+					AND		C.PASS_KEY=#{pass_key}
+			    )
+			) A
+			INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+			WHERE	RNUM=1
+			AND		A.CUST_SEQ IN (
+		    	SELECT  A.CUST_SEQ
+			    FROM    CO_V_LINK A
+			    INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ
+			    INNER JOIN CI_CUST C ON B.CI_SEQ=C.CI_SEQ
+				    WHERE   1=1
+					AND		C.PASS_KEY=#{pass_key}
+		    )
+		) A
+		INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+		INNER JOIN OM_CONTRACT C ON A.VIN=C.VIN AND C.CONTRACT_STAT_CD='D4'
+		INNER JOIN CO_GROUP D ON C.SHOP_CD=D.GROUP_ID
+		INNER JOIN VS_COLOR E ON C.BRAND_CD=E.BRAND_CD AND C.MODEL_CD=E.MODEL_CD AND C.VARIANT_CD=E.VARIANT_CD AND C.MY_CD=E.MY_CD AND C.SFX_CD=E.SFX_CD AND C.COL_COMBI_CD = E.COL_COMBI_CD
+		INNER JOIN CO_CODE F ON C.CONTRACT_STAT_CD=F.CODE AND CODE_TYPE='SA0001'
+		INNER JOIN CO_VEHIC G ON A.VIN=G.VIN
+    </select>
+    
+    <select id="selectLPMUserCnt" parameterType="String" resultType="int">
+    	SELECT  COUNT(*)
+		FROM    CI_CUST_LPM A
+		WHERE   LPM_USER_NO=#{lpm_user_no}::numeric
+		AND		USE_YN='Y'
+    </select>
+    
+    <select id="selectCiCustInvalidCnt" parameterType="se.app.customer.regular.RegularRegistDto" resultType="se.common.Param2Dto">
+    	SELECT 
+    		( SELECT COUNT(*)    
+		        FROM (
+		            SELECT CI_SEQ
+		                , PASS_KEY
+		                , ROW_NUMBER() OVER(PARTITION BY 1 ORDER BY CI_SEQ DESC) AS TN
+		            FROM CI_CUST
+		            WHERE CUST_KND = 'P'    -- 개인
+		                AND		REPLACE(REPLACE(REPLACE(CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+						AND		CUST_KEY = REPLACE(#{hp_no}, '-', '') 
+		     ) A WHERE TN = 1) PARAM1
+			, ( SELECT	COUNT(*)    
+			        FROM 	CI_CUST_LPM 
+			        WHERE	CI_SEQ IN (SELECT CI_SEQ FROM (
+				            SELECT CI_SEQ
+				                , PASS_KEY
+				                , ROW_NUMBER() OVER(PARTITION BY 1 ORDER BY CI_SEQ DESC) AS TN
+				            FROM CI_CUST
+				            WHERE CUST_KND = 'P'    -- 개인
+				                AND		REPLACE(REPLACE(REPLACE(CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+								AND		CUST_KEY = REPLACE(#{hp_no}, '-', '') 
+				     ) A WHERE TN = 1)
+				     AND	USE_YN='Y'
+				 ) PARAM2
+			 , (SELECT  COUNT(*)
+				FROM	(
+					SELECT  ROW_NUMBER() OVER(PARTITION BY B.VIN ORDER BY A.REG_DT ASC) RNUM, B.*, 'N' UCAR_YN_CHK
+					FROM    OM_CONTRACT A
+					INNER JOIN CO_V_LINK B ON A.VIN=B.VIN AND A.CUST_SEQ=B.CUST_SEQ AND A.CONTRACT_STAT_CD='D4'
+					WHERE   COALESCE(UCAR_YN,'N')!='Y'
+					AND		B.VIN IN (
+						SELECT  A.VIN
+						FROM    CO_V_LINK A
+						INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						WHERE   1=1
+						AND		VIN=#{vin}
+					)
+					AND		(SELECT COUNT(*) FROM CO_V_LINK WHERE VIN=B.VIN AND UCAR_YN='Y') = 0
+					UNION
+					SELECT  ROW_NUMBER() OVER(PARTITION BY VIN ORDER BY A.UCAR_PURCHASE_DT DESC, A.REG_DT DESC) RNUM, A.*, 'Y' UCAR_YN_CHK
+					FROM    CO_V_LINK A
+					WHERE   COALESCE(UCAR_YN,'N')='Y'
+					AND		A.VIN IN (
+						SELECT  A.VIN
+						FROM    CO_V_LINK A
+						INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+						WHERE   1=1
+						AND		VIN=#{vin}
+					)
+				) A
+				INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+				WHERE	RNUM=1
+				AND		A.CUST_SEQ IN (
+					SELECT  A.CUST_SEQ
+					FROM    CO_V_LINK A
+					INNER JOIN CU_BASE B ON A.CUST_SEQ=B.CUST_SEQ AND B.DISUSE_CD IN ('01','02') AND B.DISUSE_YN='N'
+					WHERE   1=1
+					AND		REPLACE(REPLACE(REPLACE(B.CUST_NM, ' ', ''), ',', ''),'(주)', '') LIKE '%'||REPLACE(REPLACE(REPLACE(#{cust_nm}, ' ', ''), ',', ''),'(주)', '')||'%'
+					AND		REPLACE(B.HP_AREA||B.HP_NO, '-', '') = REPLACE(#{hp_no}, '-', '') 
+				)) PARAM3
+    </select>
+    
+    <insert id="insertLPMVehicUseInfo" parameterType="se.app.customer.regular.RegularRegistDto">
+    	INSERT INTO LPM_VEHIC_USE_INFO 
+    		(VIN, LPM_USER_NO, USE_YN, REG_USER_ID, REG_DT)
+    	VALUES
+    		(#{vin}, #{lpm_user_no}::numeric, 'Y', 'LL_SYSTEM', NOW())
+    	ON CONFLICT (VIN)
+    	DO UPDATE SET LPM_USER_NO=#{lpm_user_no}::numeric, UPD_USER_ID='LL_SYSTEM', UPD_DT=NOW() 
+    </insert>
+</mapper>

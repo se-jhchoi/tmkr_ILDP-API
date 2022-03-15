@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.AdminVehicMapper">
+    <select id="selectVehicList" resultType="se.app.admin.vehic.AdminVehicDto">
+    	SELECT A.DLR_CONTRACT_NO
+		    , A.CONTRACT_DT
+			, V.BRAND_NM
+		    , V.MODEL_NM
+		    , V.VARIANT_NM
+		    , V.MY_CD MODEL_YEAR
+		    , V.SFX_NM
+		    , V.COL_COMBI_NM
+		    , A.SHOP_CD
+		    , Y.GROUP_NAME
+		    , D.ODOMETER
+		    , (SELECT MAX(PROPO_DT) FROM SVC_PROPO
+		                WHERE VIN = A.VIN 
+		                  AND STAT_CD != '99'
+		                  AND STAT_CD != '10'
+		                  AND PAYBACK_YN = 'N') AS RECENT_PROPO_DT     
+		    , C.NAME SC_NM
+		    , (SELECT HYBRID_YN FROM VS_SFX WHERE MODEL_CD = A.MODEL_CD AND VARIANT_CD = A.VARIANT_CD AND SFX_CD = A.SFX_CD AND MODEL_YEAR = A.MY_CD) HYBRID_YN
+		FROM OM_CONTRACT A
+		INNER JOIN CU_BASE B ON A.CUST_SEQ = B.CUST_SEQ
+		LEFT OUTER JOIN CO_USERS C ON B.MNG_SC_ID = C.USER_ID
+		LEFT OUTER JOIN CO_VEHIC D ON A.VIN = D.VIN
+		INNER JOIN VS_COLOR V ON A.COL_COMBI_CD = V.COL_COMBI_CD AND A.VARIANT_CD = V.VARIANT_CD AND A.MY_CD = V.MY_CD AND A.SFX_CD = V.SFX_CD
+		INNER JOIN CO_GROUP Y ON A.SHOP_CD = Y.GROUP_ID
+		WHERE 1=1
+		AND A.VIN = #{vin}
+    </select>
+</mapper>

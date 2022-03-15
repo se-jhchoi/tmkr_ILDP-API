@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.VehicMapper">
+    <select id="selectVehicInfo" parameterType="se.app.vehic.VehicDto" resultType="se.app.vehic.VehicDto">
+    SELECT  A.VIN AS VIN
+	        , B.VEHIC_NO1||B.VEHIC_NO2 AS VEHIC_NO
+	        , B.ODOMETER AS ODOMETER
+	        , CL.VARIANT_NM AS VARIANT_NM
+	        , CL.COL_COMBI_NM
+	        , D.SVC_SHOP_NM
+	        , D.SA_USER_NM
+	        , D.SVC_ADDR
+	        , D.SVC_TEL_NO
+	        , A.SR_SHOP_NM
+	        , A.SC_USER_NM
+	        , A.ADDR
+	        , A.TEL_NO
+	        , B.DELIVERY_DT
+	        , E.URL AS MAIN_SP_URL
+	        , F.URL AS WORK_OR_URL
+	FROM    (
+        SELECT  A.*
+                , B.GROUP_NAME AS SR_SHOP_NM
+                , B.ADDR||' '||B.ADDR_NO AS ADDR
+                , REGEXP_REPLACE(REPLACE(B.TEL_AREA||B.TEL_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') TEL_NO 
+                , C.NAME AS SC_USER_NM
+        FROM    OM_CONTRACT A
+                INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+                INNER JOIN CO_USERS C ON A.USER_ID=C.USER_ID
+        WHERE   1=1
+        AND     CONTRACT_STAT_CD='D4'
+        AND     VIN=#{vin}
+        ) A
+        INNER JOIN CO_VEHIC B ON A.VIN=B.VIN 
+        INNER JOIN VS_COLOR CL ON A.BRAND_CD=CL.BRAND_CD AND A.MODEL_CD=CL.MODEL_CD AND A.VARIANT_CD=CL.VARIANT_CD AND A.MY_CD=CL.MY_CD AND A.SFX_CD=CL.SFX_CD AND A.COL_COMBI_CD=CL.COL_COMBI_CD
+        LEFT OUTER JOIN (
+            SELECT  ROW_NUMBER() OVER (PARTITION BY A.VIN ORDER BY A.PROPO_DT DESC) AS RN
+                    , A.VIN
+                    , A.SHOP_CD
+                    , A.PROPO_DT
+                    , A.PROPO_SEQ
+                    , A.MNG_SA_ID
+                    , B.GROUP_NAME AS SVC_SHOP_NM
+                    , B.ADDR||' '||B.ADDR_NO AS SVC_ADDR
+                    , REGEXP_REPLACE(REPLACE(B.TEL_AREA||B.TEL_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') SVC_TEL_NO
+                    , C.NAME AS SA_USER_NM
+            FROM    SVC_PROPO A
+                    INNER JOIN CO_GROUP B ON A.SHOP_CD=B.GROUP_ID
+                    INNER JOIN CO_USERS C ON A.MNG_SA_ID=C.USER_ID
+            WHERE   COALESCE(PAYBACK_YN,'N')='N'
+            AND     STAT_CD != '99'     
+            AND     VIN=#{vin}
+        ) D ON A.VIN=D.VIN AND RN=1
+        LEFT OUTER JOIN (SELECT TYPE_CD
+                   , REF_KEY1
+                   , REF_KEY2
+                   , REF_KEY3
+                   , URL
+                FROM (SELECT REF_KEY1
+                           , REF_KEY2
+                           , REF_KEY3
+                           , URL
+                           , TYPE_CD
+                           , ROW_NUMBER () OVER (PARTITION BY REF_KEY1, REF_KEY2, REF_KEY3 ORDER BY EDOC_SEQ DESC) AS RN 
+                        FROM CO_EDOC_LIST
+                       WHERE 1=1
+                         AND TYPE_CD IN ('24','27')
+                         AND STATUS = 'VALID'
+                         AND (REF_KEY1,REF_KEY2,REF_KEY3::numeric) IN (
+                         	SELECT	SHOP_CD,PROPO_DT,PROPO_SEQ
+                         	FROM	(
+	                         		SELECT	ROW_NUMBER() OVER (PARTITION BY A.VIN ORDER BY A.PROPO_DT DESC) AS RN
+						                    , A.SHOP_CD
+						                    , A.PROPO_DT
+						                    , A.PROPO_SEQ
+	                         		FROM	SVC_PROPO A
+	                         		WHERE   COALESCE(PAYBACK_YN,'N')='N'
+						            AND     STAT_CD != '99'     
+						            AND     VIN=#{vin}
+						            ) A
+						     WHERE	RN=1
+                         )) Z
+               WHERE Z.RN = 1) E ON D.SHOP_CD = E.REF_KEY1 AND D.PROPO_DT = E.REF_KEY2 AND D.PROPO_SEQ = E.REF_KEY3::numeric
+        LEFT OUTER JOIN (SELECT TYPE_CD
+                   , REF_KEY1
+                   , REF_KEY2
+                   , REF_KEY3
+                   , URL
+                FROM (SELECT REF_KEY1
+                           , REF_KEY2
+                           , REF_KEY3
+                           , URL
+                           , TYPE_CD
+                           , ROW_NUMBER () OVER (PARTITION BY REF_KEY1, REF_KEY2, REF_KEY3 ORDER BY EDOC_SEQ DESC) AS RN 
+                        FROM CO_EDOC_LIST
+                       WHERE 1=1
+                         AND TYPE_CD IN ('27')
+                         AND STATUS = 'VALID'
+                         AND (REF_KEY1,REF_KEY2,REF_KEY3::numeric) IN (
+                         	SELECT	SHOP_CD,PROPO_DT,PROPO_SEQ
+                         	FROM	(
+	                         		SELECT	ROW_NUMBER() OVER (PARTITION BY A.VIN ORDER BY A.PROPO_DT DESC) AS RN
+						                    , A.SHOP_CD
+						                    , A.PROPO_DT
+						                    , A.PROPO_SEQ
+	                         		FROM	SVC_PROPO A
+	                         		WHERE   COALESCE(PAYBACK_YN,'N')='N'
+						            AND     STAT_CD != '99'     
+						            AND     VIN=#{vin}
+						            ) A
+						     WHERE	RN=1
+                         )) Z
+               WHERE Z.RN = 1) F ON D.SHOP_CD = F.REF_KEY1 AND D.PROPO_DT = F.REF_KEY2 AND D.PROPO_SEQ = F.REF_KEY3::numeric
+    
+    	<!-- SELECT
+			A.VIN AS VIN
+		    , A.VEHIC_NO1||A.VEHIC_NO2 AS VEHIC_NO
+		    , A.ODOMETER AS ODOMETER
+		    , A.VARIANT_NM AS VARIANT_NM
+		    , B.COL_COMBI_NM
+		    , WS.GROUP_NAME AS SVC_SHOP_NM
+		    , (SELECT NAME FROM CO_USERS WHERE USER_ID = C.MNG_SA_ID) AS SA_USER_NM
+		    , WS.ADDR||' '||WS.ADDR_NO AS SVC_ADDR
+		    , REGEXP_REPLACE(REPLACE(WS.TEL_AREA||WS.TEL_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') SVC_TEL_NO
+		    , SR.GROUP_NAME AS SR_SHOP_NM
+		    , (SELECT NAME FROM CO_USERS WHERE USER_ID = D.USER_ID) AS SC_USER_NM
+		    , SR.ADDR||' '||SR.ADDR_NO AS ADDR
+		    , REGEXP_REPLACE(REPLACE(SR.TEL_AREA||SR.TEL_NO,'-','') , '(.{3})(.+)(.{4})', '\1-\2-\3') TEL_NO
+		    , (SELECT COALESCE(E.URL, 'N')) AS MAIN_SP_YN
+		    , (SELECT COALESCE(E.URL, '')) AS MAIN_SP_URL
+		    , (SELECT COALESCE(F.URL, 'N')) AS WORK_OR_YN
+		    , (SELECT COALESCE(F.URL, '')) AS WORK_OR_URL
+		    , DELIVERY_DT
+		FROM CO_VEHIC A
+		INNER JOIN VS_COLOR B ON A.VARIANT_CD = B.VARIANT_CD AND A.MODEL_YEAR = B.MY_CD AND A.SFX_CD = B.SFX_CD AND A.COL_COMBI_CD = B.COL_COMBI_CD
+		LEFT OUTER JOIN (SELECT ROW_NUMBER() OVER (PARTITION BY VIN ORDER BY PROPO_DT DESC) AS RN
+		           , VIN
+		           , SHOP_CD
+		           , PROPO_DT
+		           , PROPO_SEQ
+		           , MNG_SA_ID
+		       FROM SVC_PROPO) C ON A.VIN = C.VIN AND C.RN = 1
+		LEFT OUTER JOIN (SELECT VIN
+		           , SHOP_CD
+		           , USER_ID
+		       FROM OM_CONTRACT) D ON A.VIN = D.VIN
+		LEFT OUTER JOIN (SELECT TYPE_CD
+		           , REF_KEY1
+		           , REF_KEY2
+		           , REF_KEY3
+		           , URL
+		        FROM (SELECT REF_KEY1
+		                   , REF_KEY2
+		                   , REF_KEY3
+		                   , URL
+		                   , TYPE_CD
+		                   , ROW_NUMBER () OVER (PARTITION BY REF_KEY1, REF_KEY2, REF_KEY3 ORDER BY EDOC_SEQ DESC) AS RN 
+		                FROM CO_EDOC_LIST
+		               WHERE 1=1
+		                 AND TYPE_CD IN ('24')
+		                 AND STATUS = 'VALID') Z
+		       WHERE Z.RN = 1) E ON C.SHOP_CD = E.REF_KEY1 AND C.PROPO_DT = E.REF_KEY2 AND C.PROPO_SEQ = E.REF_KEY3::numeric
+		LEFT OUTER JOIN (SELECT TYPE_CD
+		           , REF_KEY1
+		           , REF_KEY2
+		           , REF_KEY3
+		           , URL
+		        FROM (SELECT REF_KEY1
+		                   , REF_KEY2
+		                   , REF_KEY3
+		                   , URL
+		                   , TYPE_CD
+		                   , ROW_NUMBER () OVER (PARTITION BY REF_KEY1, REF_KEY2, REF_KEY3 ORDER BY EDOC_SEQ DESC) AS RN 
+		                FROM CO_EDOC_LIST
+		               WHERE 1=1
+		                 AND TYPE_CD IN ('27')
+		                 AND STATUS = 'VALID') Z
+		       WHERE Z.RN = 1) F ON C.SHOP_CD = F.REF_KEY1 AND C.PROPO_DT = F.REF_KEY2 AND C.PROPO_SEQ = F.REF_KEY3::numeric
+		LEFT OUTER JOIN CO_GROUP WS ON C.SHOP_CD = WS.GROUP_ID
+		LEFT OUTER JOIN CO_GROUP SR ON D.SHOP_CD = SR.GROUP_ID
+		WHERE 1=1
+		AND A.VIN=#{vin} -->
+    </select>
+    
+    <select id="selectVehicCnt" parameterType="String" resultType="int">
+	    SELECT  COUNT(*)
+	    FROM    CO_V_LINK A
+	    WHERE   VIN=#{vin}
+	    AND     CUST_SEQ IN (
+	        SELECT  CUST_SEQ
+	        FROM    CU_BASE
+	        WHERE   CI_SEQ IN (
+	            SELECT  CI_SEQ
+	            FROM    CI_CUST_LPM
+	            WHERE   LPM_USER_NO=#{lpm_user_no}::numeric
+	            AND		USE_YN='Y'
+	        )
+	    )
+    </select>
+</mapper>

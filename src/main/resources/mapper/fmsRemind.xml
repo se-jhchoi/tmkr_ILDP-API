@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.FmsRemindMapper">
+    <select id="selectFmsRemindList" parameterType="se.app.svc.fms.FmsRemindDto" resultType="se.app.svc.fms.FmsRemindDto">
+		SELECT  CASE WHEN A.ITEM_TYPE='1' THEN '무상점검 잔여 횟수 (' || COALESCE(B.CNT,0) || ')'
+					 WHEN A.ITEM_TYPE='2' THEN '엔진오일 및 오일필터 교환 잔여 횟수 (' || COALESCE(B.CNT,0) || ')'
+					 WHEN A.ITEM_TYPE='5' THEN '엔진 에어 클리너 교환 잔여 횟수 (' || COALESCE(B.CNT,0) || ')'
+					 WHEN A.ITEM_TYPE='4' THEN '브레이크 패드 앞 교환 잔여 횟수 (' || COALESCE(B.CNT,0) || ')'
+					 WHEN A.ITEM_TYPE='3' THEN '브레이크 패드 뒤 교환 잔여 횟수 (' || COALESCE(B.CNT,0) || ')'
+					 ELSE ''
+					 END FMS_REMIND
+		FROM    (
+		    SELECT LEVEL ITEM_TYPE FROM GENERATE_SERIES(1,5) LEVEL
+		) A
+		LEFT OUTER JOIN (
+			SELECT  B.ITEM_TYPE, COUNT(*) CNT
+			FROM    SVC_FMS A
+					, PM_FMS_ITEM_NEW B
+			WHERE   A.FMS_ITEM_CD=B.FMS_ITEM_CD
+			AND     A.EXEC_YN = 'N'
+			AND     A.CAN_USE_YN='Y'
+			AND     TO_CHAR(NOW(),'YYYYMMDD') BETWEEN A.APPLY_ST_DATE AND A.APPLY_END_DATE
+			AND     VIN=#{vin}
+			GROUP BY B.ITEM_TYPE
+		) B ON A.ITEM_TYPE::numeric= B.ITEM_TYPE::numeric
+	</select>    
+</mapper>
