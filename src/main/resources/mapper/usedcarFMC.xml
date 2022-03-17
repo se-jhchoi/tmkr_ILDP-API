@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="se.mapper.app.UsedcarFMCMapper">
+   	<insert id="insertFMCRequest" parameterType="se.app.homepage.usedcar.UsedcarFMCRequestDto" useGeneratedKeys="true" keyColumn="request_number" keyProperty="request_number">
+   	INSERT INTO	EXT_UCAR_FMC_REQUEST
+   	(
+		request_number,client_nm,brand_cd,shop_cd,model,variant
+		,fmc_input_dt,fmc_req_dt,plate_no,cust_nm,cust_hp,request_path
+		,inbound_path,custinfo_exp_dt,remark,status,dms_interface_dt
+		,reg_user_id,reg_dt,upd_user_id,upd_dt
+	)
+	VALUES
+   	(
+   		DEFAULT,#{client_nm},#{brand_cd},#{shop_cd},COALESCE(#{model},#{variant}),#{variant}
+   		,#{fmc_input_dt},#{fmc_req_dt},#{plate_no},#{cust_nm},#{cust_hp},#{request_path}
+   		,#{inbound_path},#{custinfo_exp_dt},#{remark},'10',null
+		,#{client_nm},now(),null,null
+   	)
+	</insert>
+	
+    <select id="selectOneFMCRequest" parameterType="Integer" resultType="se.app.homepage.usedcar.UsedcarFMCRequestDto">
+	SELECT	request_number,client_nm,brand_cd,shop_cd,model,variant
+			,fmc_input_dt,fmc_req_dt,plate_no,cust_nm,cust_hp,request_path
+			,inbound_path,custinfo_exp_dt,remark
+			,case when status='10' then 'Request' else 'Register' end as status_nm
+			,reg_user_id,reg_dt,upd_user_id,upd_dt
+	FROM	EXT_UCAR_FMC_REQUEST
+	WHERE	1=1
+	AND		request_number=#{request_number}
+    </select>
+
+</mapper>

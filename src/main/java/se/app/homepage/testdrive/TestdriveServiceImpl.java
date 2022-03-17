@@ -1,9 +1,10 @@
-package se.app.testdrive;
+package se.app.homepage.testdrive;
 
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
+import se.app.homepage.CommonCodeDto;
 import se.mapper.app.TestdriveMapper;
 
 @Service
@@ -24,6 +25,11 @@ public class TestdriveServiceImpl implements TestdriveService {
 	@Override
 	public List<CommonCodeDto> searchShop(CommonCodeDto cco) throws Exception {
 		return tdm.selectListShop(cco);
+	}
+
+	@Override
+	public List<CommonCodeDto> searchCenter(CommonCodeDto cco) throws Exception {
+		return tdm.selectListCenter(cco);
 	}
 
 	@Override

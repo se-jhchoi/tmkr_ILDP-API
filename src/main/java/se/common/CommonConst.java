@@ -21,4 +21,5 @@ public class CommonConst {
 	//	HOMEPATE -> DMS Interface List
 	//==========================================================================
 	public static final String	KEY_TESTDRIVE_REQUEST				= "TD_REQ";			// 시승 요청
+	public static final String 	KEY_UCAR_FMC_REQUEST				= "UFMC_REQ";		// 중고차 무상점검 요청
 }

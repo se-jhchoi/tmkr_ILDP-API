@@ -1,8 +1,7 @@
-package se.app.testdrive;
+package se.app.homepage.usedcar;
 
 import org.springframework.stereotype.Service;
 
-import se.mapper.app.TestdriveMapper;
 import se.mapper.app.UsedcarFMCMapper;
 
 @Service
@@ -17,14 +16,13 @@ public class UsedcarFMCServiceImpl implements UsedcarFMCService {
 
 	@Override
 	public Integer registerUsedcarFMCRequest(UsedcarFMCRequestDto ufo) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		ufm.insertFMCRequest(ufo);
+		return ufo.getRequest_number();
 	}
 
 	@Override
 	public UsedcarFMCRequestDto searchUsedcarFMCRequest(Integer request_number) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		return ufm.selectOneFMCRequest(request_number);
 	}
 
 }

@@ -1,4 +1,4 @@
-package se.app.testdrive;
+package se.app.homepage;
 
 import lombok.Getter;
 import lombok.ToString;

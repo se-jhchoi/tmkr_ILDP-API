@@ -12,4 +12,4 @@
 관리자 : 김명환(se-mhkim)  
   
 <별도관리 Resources>  
-/src/main/resources/application.properties    
+/src/main/resources/application.properties  

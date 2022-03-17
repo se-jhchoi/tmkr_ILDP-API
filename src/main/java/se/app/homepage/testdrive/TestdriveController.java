@@ -1,4 +1,4 @@
-package se.app.testdrive;
+package se.app.homepage.testdrive;
 
 import java.util.List;
 
@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.google.gson.Gson;
 
+import se.app.homepage.ApiException;
+import se.app.homepage.ApiResponseEntity;
+import se.app.homepage.ApiStatusEnum;
+import se.app.homepage.CommonCodeDto;
 import se.common.CommonConst;
 import se.common.CommonService;
 import se.common.InterfaceMasterDto;
@@ -130,7 +134,9 @@ public class TestdriveController {
     	// 2.Call Service
     	try {
     		if ( cco.getCode_type().equals("SHOP")) {
-    			codes = tds.searchShop(cco);
+				codes = tds.searchShop(cco);
+			} else if ( cco.getCode_type().equals("CENTER")) {
+				codes = tds.searchCenter(cco);
     		} else {
     			codes = tds.searchCommonCode(cco);
     		}

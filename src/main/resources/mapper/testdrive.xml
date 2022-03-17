@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="se.mapper.app.TestdriveMapper">
-    <select id="selectListCommonCode" parameterType="se.app.testdrive.CommonCodeDto" resultType="se.app.testdrive.CommonCodeDto">
+    <select id="selectListCommonCode" parameterType="se.app.homepage.CommonCodeDto" resultType="se.app.homepage.CommonCodeDto">
 	SELECT	#{brand_cd} as brand_cd
 			, code_type
 			, code
@@ -13,7 +13,7 @@
 	ORDER BY DISPALY_ORDER::numeric ASC
     </select>
     
-    <select id="selectListShop" parameterType="se.app.testdrive.CommonCodeDto" resultType="se.app.testdrive.CommonCodeDto">
+    <select id="selectListShop" parameterType="se.app.homepage.CommonCodeDto" resultType="se.app.homepage.CommonCodeDto">
 	    <choose>
 	    	<when test='brand_cd!=null and brand_cd.equals("L")'>
 		    select	#{brand_cd} as brand_cd
@@ -22,7 +22,7 @@
 					, name
 			from	(			
 					select	group_id as code
-							, group_name as name
+							, trim(group_name) as name
 							, dspy_rank::numeric as dspy_rank
 					from	co_group a
 					where	group_type in ('S','W')
@@ -46,7 +46,7 @@
 					, name
 			from	(			
 					select	group_id as code
-							, group_name as name
+							, trim(group_name) as name
 							, dspy_rank::numeric as dspy_rank
 					from	co_group_toyota a
 					where	group_type in ('S','W')
@@ -67,9 +67,57 @@
 	    	select	null as brand_cd, null as code_type, null as code, null as name
 	    	</otherwise>
 	    </choose>
-    </select>    
-    
-   	<insert id="insertRequest" parameterType="se.app.testdrive.TestdriveRequestDto" useGeneratedKeys="true" keyColumn="request_number" keyProperty="request_number">
+    </select>
+
+	<select id="selectListCenter" parameterType="se.app.homepage.CommonCodeDto" resultType="se.app.homepage.CommonCodeDto">
+		<choose>
+			<when test='brand_cd!=null and brand_cd.equals("L")'>
+				select	#{brand_cd} as brand_cd
+				, #{code_type} as code_type
+				, code
+				, name
+				from	(
+						select	group_id as code
+								, replace(replace(replace(group_name,' ',''),'서비스센터',''),'렉서스','렉서스 ') as name
+								, dspy_rank::numeric as dspy_rank
+						from	co_group a
+						where	group_type in ('P')
+						and		service_yn='Y'
+						and		usage_type='S'
+						and		system_use_yn='Y'
+						and		use_yn='Y'
+						and		holding_id != 'TM00000'
+				) a
+				where	1=1
+				order by dspy_rank asc
+			</when>
+			<when test='brand_cd!=null and brand_cd.equals("T")'>
+				select	#{brand_cd} as brand_cd
+				, #{code_type} as code_type
+				, code
+				, name
+				from	(
+						select	group_id as code
+								, replace(replace(replace(group_name,' ',''),'서비스센터',''),'토요타','토요타 ') as name
+								, dspy_rank::numeric as dspy_rank
+						from	co_group_toyota a
+						where	group_type in ('P')
+						and		service_yn='Y'
+						and		usage_type='S'
+						and		system_use_yn='Y'
+						and		use_yn='Y'
+						and		holding_id != 'TM00000'
+				) a
+				where	1=1
+				order by dspy_rank asc
+			</when>
+			<otherwise>
+				select	null as brand_cd, null as code_type, null as code, null as name
+			</otherwise>
+		</choose>
+	</select>
+
+	<insert id="insertRequest" parameterType="se.app.homepage.testdrive.TestdriveRequestDto" useGeneratedKeys="true" keyColumn="request_number" keyProperty="request_number">
    	INSERT INTO	EXT_TESTDRIVE_REQUEST
    	(
 		request_number,client_nm,brand_cd,shop_cd,model,variant
@@ -88,7 +136,7 @@
    	)
 	</insert>
 	
-    <select id="selectOneRequest" parameterType="Integer" resultType="se.app.testdrive.TestdriveRequestDto">
+    <select id="selectOneRequest" parameterType="Integer" resultType="se.app.homepage.testdrive.TestdriveRequestDto">
 	SELECT	request_number,client_nm,brand_cd,shop_cd,model,variant
 			,td_input_dt,td_req_dt,td_req_time,cust_nm,cust_hp
 			,visit_area,gender,age,email,inbound_path,custinfo_exp_dt,remark
@@ -96,7 +144,7 @@
 			,thmp_td_client_id, thmp_td_url
 	FROM	EXT_TESTDRIVE_REQUEST
 	WHERE	1=1
-	AND		req_seq=#{request_number}
+	AND		request_number=#{request_number}
     </select>
 
 </mapper>

@@ -1,4 +1,4 @@
-package se.app.testdrive;
+package se.app.homepage;
 
 import javax.validation.constraints.NotBlank;
 import javax.validation.constraints.Pattern;

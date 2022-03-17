@@ -1,4 +1,4 @@
-package se.app.testdrive;
+package se.app.homepage;
 
 import lombok.Builder;
 import lombok.Data;
