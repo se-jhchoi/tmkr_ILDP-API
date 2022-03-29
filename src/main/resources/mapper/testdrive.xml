@@ -125,6 +125,7 @@
 		,visit_area,gender,age,email,inbound_path,custinfo_exp_dt,remark
 		,status,dms_interface_dt,reg_user_id,reg_dt,upd_user_id,upd_dt
 		,thmp_td_client_id, thmp_td_url
+		,request_path, event_type, interest_brand, interest_variant
 	)
 	VALUES
    	(
@@ -133,6 +134,7 @@
    		,#{visit_area},#{gender},#{age},#{email},#{inbound_path},#{custinfo_exp_dt},#{remark}
 		,'10',null,#{client_nm},now(),null,null
 		,#{thmp_td_client_id},#{thmp_td_url}
+		,#{request_path}, #{event_type}, #{interest_brand}, #{interest_variant}
    	)
 	</insert>
 	
@@ -142,6 +144,7 @@
 			,visit_area,gender,age,email,inbound_path,custinfo_exp_dt,remark
 			,case when status='10' then 'Request' else 'Register' end as status_nm
 			,thmp_td_client_id, thmp_td_url
+			,request_path, event_type, interest_brand, interest_variant
 	FROM	EXT_TESTDRIVE_REQUEST
 	WHERE	1=1
 	AND		request_number=#{request_number}

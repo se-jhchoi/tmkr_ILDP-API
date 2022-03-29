@@ -35,7 +35,7 @@ public class UsedcarFMCRequestDto {
     private String fmc_input_dt;
 
     @NotBlank(message="fmc_req_dt는 필수값 입니다.")
-    @Pattern(regexp="(20)\\d{2}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[0-1])-(20)\\d{2}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[0-1])",message="fmc_req_dt가 유효한 형식이 아닙니다.")
+    @Pattern(regexp="(20)\\d{2}(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[0-1])-((20)\\d{2}|(9999))(0[1-9]|1[012])(0[1-9]|[12][0-9]|3[0-1])",message="fmc_req_dt가 유효한 형식이 아닙니다.")
     private String fmc_req_dt;
 
     @NotBlank(message="plate_no는 필수값 입니다.")

@@ -90,4 +90,12 @@ public class TestdriveRequestDto {
 	private String thmp_td_client_id;
 	
 	private String thmp_td_url;
+
+	private String request_path;
+
+	private String event_type;
+
+	private String interest_brand;
+
+	private String interest_variant;
 }

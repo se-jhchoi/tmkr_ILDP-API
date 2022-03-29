@@ -62,11 +62,17 @@ public class TestdriveController {
     	
 		String brand = tdo.getBrand_cd();
 		if ( StringUtils.equals(brand, "T")) {
+			// client id의 경우 사용자가 cookie값 사용을 금지한 경우 수집안되어 null 체크 제외됨
 			//if ( StringUtils.isBlank(tdo.getThmp_td_client_id()) || StringUtils.isBlank(tdo.getThmp_td_url())) {
-			if ( StringUtils.isBlank(tdo.getThmp_td_url())) {
+			if ( StringUtils.isBlank(tdo.getThmp_td_url())
+				|| StringUtils.isBlank(tdo.getRequest_path())
+				|| StringUtils.isBlank(tdo.getEvent_type())
+				|| StringUtils.isBlank(tdo.getInterest_brand())
+				|| StringUtils.isBlank(tdo.getInterest_variant())
+			) {
 				throw new ApiException(ApiStatusEnum.VALIDATION_EXCEPTION);
 			}
-		}    	
+		}
     	
     	// 2.Call Service
     	try {
