@@ -10,7 +10,7 @@
 	WHERE	1=1
 	AND		CODE_TYPE=#{code_type}
 	AND		USE_YN='Y'
-	ORDER BY DISPALY_ORDER::numeric ASC
+	ORDER BY DISPLAY_ORDER::numeric ASC
     </select>
     
     <select id="selectListShop" parameterType="se.app.homepage.CommonCodeDto" resultType="se.app.homepage.CommonCodeDto">
